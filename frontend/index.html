@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventario de Aceites</title>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <p class="brand-block__kicker">Gestión comercial</p>
+          <h1>Sistema de Inventario y Ventas</h1>
+          <p>Tienda de aceites y lubricantes</p>
+        </div>
+
+        <div class="topbar-widgets">
+          <section class="status-card">
+            <h2>Estado del sistema</h2>
+            <div id="app-info" class="info-list">
+              <div class="info-item">Cargando información del sistema...</div>
+            </div>
+          </section>
+
+          <section class="status-card">
+            <h2>Resumen rápido</h2>
+            <div id="quick-stats" class="mini-stats"></div>
+          </section>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="summary-grid" aria-label="Resumen del sistema" id="dashboard-metrics"></section>
+
+        <nav class="tabs" role="tablist" aria-label="Secciones principales">
+          <button class="tabs__button is-active" type="button" data-tab="inventario" role="tab" aria-selected="true">Inventario</button>
+          <button class="tabs__button" type="button" data-tab="movimientos" role="tab" aria-selected="false">Movimientos</button>
+          <button class="tabs__button" type="button" data-tab="ventas" role="tab" aria-selected="false">Ventas</button>
+        </nav>
+
+        <div class="tab-panels">
+            <section class="tab-panel is-active" data-panel="inventario" role="tabpanel">
+              <div class="module-layout">
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Catálogo</span>
+                      <h2>Registrar o editar producto</h2>
+                    </div>
+                    <button class="button button--ghost" id="product-form-reset" type="button">Nuevo</button>
+                  </div>
+
+                  <p class="module-status" id="inventory-status"></p>
+
+                  <form id="product-form" class="form-grid">
+                    <input type="hidden" name="id_producto" />
+
+                    <label class="field">
+                      <span>Código</span>
+                      <input name="codigo" type="text" placeholder="ACE-001" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Código de barra</span>
+                      <input name="codigo_barra" type="text" placeholder="Opcional" />
+                    </label>
+
+                    <label class="field field--wide">
+                      <span>Nombre</span>
+                      <input name="nombre" type="text" placeholder="Aceite 10W-30" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Marca</span>
+                      <select name="id_marca" required></select>
+                    </label>
+
+                    <label class="field">
+                      <span>Categoría</span>
+                      <select name="id_categoria"></select>
+                    </label>
+
+                    <label class="field">
+                      <span>Unidad</span>
+                      <input name="unidad_medida" type="text" placeholder="Litro / Galón" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Precio costo</span>
+                      <input name="precio_costo" type="number" step="0.01" min="0" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Precio venta</span>
+                      <input name="precio_venta" type="number" step="0.01" min="0" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Stock mínimo</span>
+                      <input name="stock_minimo" type="number" step="0.01" min="0" value="0" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Stock inicial</span>
+                      <input name="stock_inicial" type="number" step="0.01" min="0" value="0" />
+                    </label>
+
+                    <label class="field field--wide">
+                      <span>Descripción</span>
+                      <textarea name="descripcion" rows="3" placeholder="Detalle opcional del producto"></textarea>
+                    </label>
+
+                    <label class="field field--checkbox">
+                      <input name="estado" type="checkbox" checked />
+                      <span>Producto activo</span>
+                    </label>
+
+                    <div class="form-actions field--wide">
+                      <button class="button button--primary" type="submit">Guardar producto</button>
+                    </div>
+                  </form>
+                </section>
+
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Stock</span>
+                      <h2>Listado de productos</h2>
+                    </div>
+                    <span class="module-badge" id="inventory-count">0 productos</span>
+                  </div>
+
+                  <div class="table-wrap">
+                    <table class="data-table" id="products-table">
+                      <thead>
+                        <tr>
+                          <th>Producto</th>
+                          <th>Marca</th>
+                          <th>Categoría</th>
+                          <th>Stock</th>
+                          <th>Precio venta</th>
+                          <th>Estado</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+            </section>
+
+          <section class="tab-panel" data-panel="movimientos" role="tabpanel">
+              <div class="module-layout">
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Entradas y salidas</span>
+                      <h2>Registrar movimiento</h2>
+                    </div>
+                  </div>
+
+                  <p class="module-status" id="movement-status"></p>
+
+                  <form id="movement-form" class="form-grid">
+                    <label class="field">
+                      <span>Producto</span>
+                      <select name="id_producto" required></select>
+                    </label>
+
+                    <label class="field">
+                      <span>Tipo de movimiento</span>
+                      <select name="tipo_movimiento" required>
+                        <option value="ENTRADA">Entrada</option>
+                        <option value="SALIDA">Salida</option>
+                        <option value="AJUSTE_POS">Ajuste positivo</option>
+                        <option value="AJUSTE_NEG">Ajuste negativo</option>
+                        <option value="DEVOLUCION">Devolución</option>
+                      </select>
+                    </label>
+
+                    <label class="field">
+                      <span>Cantidad</span>
+                      <input name="cantidad" type="number" step="0.01" min="0.01" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Costo unitario</span>
+                      <input name="costo_unitario" type="number" step="0.01" min="0" />
+                    </label>
+
+                    <label class="field">
+                      <span>Motivo</span>
+                      <input name="motivo" type="text" placeholder="Compra, ajuste, devolución..." />
+                    </label>
+
+                    <label class="field">
+                      <span>Referencia</span>
+                      <input name="referencia" type="text" placeholder="Factura, nota, etc." />
+                    </label>
+
+                    <label class="field field--wide">
+                      <span>Observación</span>
+                      <textarea name="observacion" rows="3" placeholder="Detalle opcional del movimiento"></textarea>
+                    </label>
+
+                    <div class="form-actions field--wide">
+                      <button class="button button--primary" type="submit">Guardar movimiento</button>
+                    </div>
+                  </form>
+                </section>
+
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Trazabilidad</span>
+                      <h2>Historial reciente</h2>
+                    </div>
+                    <span class="module-badge" id="movement-count">0 movimientos</span>
+                  </div>
+
+                  <div class="table-wrap">
+                    <table class="data-table" id="movements-table">
+                      <thead>
+                        <tr>
+                          <th>Fecha</th>
+                          <th>Producto</th>
+                          <th>Tipo</th>
+                          <th>Cantidad</th>
+                          <th>Motivo</th>
+                          <th>Referencia</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+            </section>
+
+          <section class="tab-panel" data-panel="ventas" role="tabpanel">
+              <div class="module-layout">
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Caja</span>
+                      <h2>Registrar venta simple</h2>
+                    </div>
+                  </div>
+
+                  <p class="module-status" id="sale-status"></p>
+
+                  <form id="sale-form" class="form-grid">
+                    <label class="field">
+                      <span>Producto</span>
+                      <select name="id_producto" required></select>
+                    </label>
+
+                    <label class="field">
+                      <span>Cantidad</span>
+                      <input name="cantidad" type="number" step="0.01" min="0.01" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Método de pago</span>
+                      <select name="id_metodo_pago" required></select>
+                    </label>
+
+                    <label class="field">
+                      <span>Moneda</span>
+                      <select name="id_moneda" required></select>
+                    </label>
+
+                    <label class="field">
+                      <span>Descuento total</span>
+                      <input name="descuento_total" type="number" step="0.01" min="0" value="0" />
+                    </label>
+
+                    <label class="field field--wide">
+                      <span>Observación</span>
+                      <textarea name="observacion" rows="3" placeholder="Nota opcional para la venta"></textarea>
+                    </label>
+
+                    <div class="form-actions field--wide">
+                      <button class="button button--primary" type="submit">Guardar venta</button>
+                    </div>
+                  </form>
+                </section>
+
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Ventas</span>
+                      <h2>Últimas ventas</h2>
+                    </div>
+                    <span class="module-badge" id="sale-count">0 ventas</span>
+                  </div>
+
+                  <div class="table-wrap">
+                    <table class="data-table" id="sales-table">
+                      <thead>
+                        <tr>
+                          <th>Factura</th>
+                          <th>Fecha</th>
+                          <th>Producto</th>
+                          <th>Cantidad</th>
+                          <th>Total</th>
+                          <th>Pago</th>
+                          <th>Vendedor</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+            </section>
+        </div>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
