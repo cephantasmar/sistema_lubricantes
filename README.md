@@ -2,6 +2,12 @@
 
 Base inicial de escritorio construida con Electron, TypeScript y SQLite.
 
+## Módulos
+
+- Ventas
+- Inventarios
+- Gestión por turnos de trabajadores (pendiente de implementación completa)
+
 ## Estructura
 
 - `backend/src/main`: proceso principal de Electron, base de datos e IPC.
