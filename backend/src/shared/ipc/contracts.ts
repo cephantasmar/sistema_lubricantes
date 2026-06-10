@@ -60,6 +60,43 @@ export type SaleRow = {
   vendedor: string
 }
 
+export type WorkerRow = {
+  id_trabajador: number
+  nombre_completo: string
+  cargo: string | null
+  estado: string
+}
+
+export type ShiftRow = {
+  id_turno: number
+  nombre: string
+  hora_inicio: string
+  hora_fin: string
+  descripcion: string | null
+}
+
+export type AttendanceRow = {
+  id_asistencia: number
+  id_trabajador: number
+  trabajador_nombre: string
+  id_turno: number
+  turno_nombre: string
+  fecha: string
+  hora_entrada: string | null
+  hora_salida: string | null
+  observacion: string | null
+  estado: 'EN_TURNO' | 'COMPLETADO'
+}
+
+export type WorkHoursSummaryRow = {
+  id_trabajador: number
+  trabajador_nombre: string
+  cargo: string | null
+  asistencias_completadas: number
+  minutos_trabajados: number
+  horas_trabajadas: number
+}
+
 export type ProductFormInput = {
   id_producto?: number | null
   codigo: string
@@ -97,12 +134,20 @@ export type SaleFormInput = {
   realizado_por?: number | null
 }
 
+export type AttendanceFormInput = {
+  id_trabajador: number
+  id_turno?: number | null
+  observacion?: string | null
+}
+
 export type BootstrapData = {
   references: {
     marcas: ReferenceItem[]
     categorias: ReferenceItem[]
     monedas: ReferenceItem[]
     metodosPago: ReferenceItem[]
+    trabajadores: WorkerRow[]
+    turnos: ShiftRow[]
   }
   metrics: {
     totalProducts: number
@@ -110,8 +155,11 @@ export type BootstrapData = {
     lowStockProducts: number
     totalMovements: number
     totalSales: number
+    activeAttendances: number
   }
   products: ProductRow[]
   movements: MovementRow[]
   sales: SaleRow[]
+  attendances: AttendanceRow[]
+  workHoursSummary: WorkHoursSummaryRow[]
 }

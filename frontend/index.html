@@ -36,6 +36,7 @@
           <button class="tabs__button is-active" type="button" data-tab="inventario" role="tab" aria-selected="true">Inventario</button>
           <button class="tabs__button" type="button" data-tab="movimientos" role="tab" aria-selected="false">Movimientos</button>
           <button class="tabs__button" type="button" data-tab="ventas" role="tab" aria-selected="false">Ventas</button>
+          <button class="tabs__button" type="button" data-tab="turnos" role="tab" aria-selected="false">Turnos</button>
         </nav>
 
         <div class="tab-panels">
@@ -307,6 +308,97 @@
                           <th>Total</th>
                           <th>Pago</th>
                           <th>Vendedor</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+            </section>
+
+          <section class="tab-panel" data-panel="turnos" role="tabpanel">
+              <div class="module-layout">
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Asistencia</span>
+                      <h2>Registrar entrada o salida</h2>
+                    </div>
+                    <span class="module-badge" id="attendance-active-count">0 en turno</span>
+                  </div>
+
+                  <p class="module-status" id="attendance-status"></p>
+
+                  <form id="attendance-form" class="form-grid">
+                    <label class="field field--wide">
+                      <span>Trabajador</span>
+                      <select name="id_trabajador" required></select>
+                    </label>
+
+                    <label class="field field--wide">
+                      <span>Turno</span>
+                      <select name="id_turno"></select>
+                    </label>
+
+                    <div class="shift-state field--wide" id="attendance-current-state">
+                      <span>Selecciona un trabajador para ver su estado.</span>
+                    </div>
+
+                    <label class="field field--wide">
+                      <span>Observacion</span>
+                      <textarea name="observacion" rows="3" placeholder="Retraso, permiso, nota de cierre..."></textarea>
+                    </label>
+
+                    <div class="attendance-actions field--wide">
+                      <button class="button button--primary" type="submit" data-attendance-action="entry">Registrar entrada</button>
+                      <button class="button button--danger" type="submit" data-attendance-action="exit">Registrar salida</button>
+                    </div>
+                  </form>
+                </section>
+
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Control horario</span>
+                      <h2>Asistencias recientes</h2>
+                    </div>
+                    <span class="module-badge" id="attendance-count">0 registros</span>
+                  </div>
+
+                  <div class="table-wrap">
+                    <table class="data-table" id="attendance-table">
+                      <thead>
+                        <tr>
+                          <th>Trabajador</th>
+                          <th>Turno</th>
+                          <th>Entrada</th>
+                          <th>Salida</th>
+                          <th>Estado</th>
+                          <th>Observacion</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section class="module-card module-card--wide">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Pago de personal</span>
+                      <h2>Horas trabajadas por empleado</h2>
+                    </div>
+                  </div>
+
+                  <div class="table-wrap">
+                    <table class="data-table" id="work-hours-table">
+                      <thead>
+                        <tr>
+                          <th>Trabajador</th>
+                          <th>Cargo</th>
+                          <th>Asistencias cerradas</th>
+                          <th>Horas trabajadas</th>
                         </tr>
                       </thead>
                       <tbody></tbody>

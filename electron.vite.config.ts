@@ -7,6 +7,8 @@ export default defineConfig({
       outDir: 'dist/main',
       lib: {
         entry: resolve('backend/src/main/index.ts'),
+        formats: ['cjs'],
+        fileName: () => 'index.cjs',
       },
     },
     plugins: [externalizeDepsPlugin()],
@@ -16,6 +18,8 @@ export default defineConfig({
       outDir: 'dist/preload',
       lib: {
         entry: resolve('backend/src/preload/index.ts'),
+        formats: ['cjs'],
+        fileName: () => 'index.cjs',
       },
     },
     plugins: [externalizeDepsPlugin()],

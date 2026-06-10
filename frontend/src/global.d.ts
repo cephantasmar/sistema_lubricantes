@@ -2,6 +2,7 @@
 
 import type {
   AppInfo,
+  AttendanceFormInput,
   BootstrapData,
   MovementFormInput,
   ProductFormInput,
@@ -16,6 +17,8 @@ declare global {
       saveProduct: (payload: ProductFormInput) => Promise<{ productId: number }>
       createMovement: (payload: MovementFormInput) => Promise<{ movementId: number }>
       createSale: (payload: SaleFormInput) => Promise<{ saleId: number }>
+      registerAttendanceEntry: (payload: AttendanceFormInput) => Promise<{ attendanceId: number }>
+      registerAttendanceExit: (payload: AttendanceFormInput) => Promise<{ attendanceId: number }>
     }
   }
 }
