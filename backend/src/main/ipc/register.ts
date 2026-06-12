@@ -1,7 +1,7 @@
 import { app, ipcMain } from 'electron'
 import type Database from 'better-sqlite3'
 import { getDatabasePath } from '../db/database'
-import { createMovement, createSale, getBootstrapData, saveProduct } from '../modules/store'
+import { closeInventory, createMovement, createSale, getBootstrapData, saveProduct } from '../modules/store'
 
 let handlersRegistered = false
 
@@ -30,6 +30,10 @@ export function registerSystemIpc(database: Database.Database) {
 
   ipcMain.handle('inventory:create-movement', (_event, payload) => {
     return createMovement(database, payload)
+  })
+
+  ipcMain.handle('inventory:close-inventory', (_event, payload) => {
+    return closeInventory(database, payload)
   })
 
   ipcMain.handle('sales:create-sale', (_event, payload) => {

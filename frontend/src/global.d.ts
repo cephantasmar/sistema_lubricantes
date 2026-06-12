@@ -3,6 +3,8 @@
 import type {
   AppInfo,
   BootstrapData,
+  InventoryAuditInput,
+  InventoryAuditResult,
   MovementFormInput,
   ProductFormInput,
   SaleFormInput,
@@ -15,6 +17,7 @@ declare global {
       getBootstrapData: () => Promise<BootstrapData>
       saveProduct: (payload: ProductFormInput) => Promise<{ productId: number }>
       createMovement: (payload: MovementFormInput) => Promise<{ movementId: number }>
+      closeInventory: (payload: InventoryAuditInput) => Promise<InventoryAuditResult>
       createSale: (payload: SaleFormInput) => Promise<{ saleId: number }>
     }
   }
