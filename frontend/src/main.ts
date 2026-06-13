@@ -15,8 +15,6 @@ import type {
 } from '@shared/ipc/contracts'
 
 type TabName = 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion'
-
-type TabName = 'inventario' | 'movimientos' | 'ventas' | 'asistencias' | 'administracion'
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
 
@@ -1275,7 +1273,6 @@ async function bootstrap() {
   appInfoSnapshot = await window.inventoryApi.getAppInfo()
 
   await refresh()
-  setupRealtimeRefresh()
 
   const productForm = document.querySelector<HTMLFormElement>('#product-form')
   const movementForm = document.querySelector<HTMLFormElement>('#movement-form')
