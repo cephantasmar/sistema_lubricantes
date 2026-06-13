@@ -2,6 +2,7 @@
 
 import type {
   AppInfo,
+  AttendanceFormInput,
   BootstrapData,
   InventoryAuditInput,
   InventoryAuditResult,
@@ -24,6 +25,8 @@ declare global {
       createMovement: (payload: MovementFormInput) => Promise<{ movementId: number }>
       closeInventory: (payload: InventoryAuditInput) => Promise<InventoryAuditResult>
       createSale: (payload: SaleFormInput) => Promise<{ saleId: number }>
+      registerAttendanceEntry: (payload: AttendanceFormInput) => Promise<{ attendanceId: number }>
+      registerAttendanceExit: (payload: AttendanceFormInput) => Promise<{ attendanceId: number }>
       login: (payload: AuthInput) => Promise<AuthResult>
       saveRole: (payload: RoleFormInput) => Promise<{ roleId: number }>
       saveWorker: (payload: WorkerFormInput) => Promise<{ workerId: number }>

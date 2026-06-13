@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AppInfo,
+  AttendanceFormInput,
   BootstrapData,
   InventoryAuditInput,
   InventoryAuditResult,
@@ -24,6 +25,10 @@ contextBridge.exposeInMainWorld('inventoryApi', {
   closeInventory: (payload: InventoryAuditInput) =>
     ipcRenderer.invoke('inventory:close-inventory', payload) as Promise<InventoryAuditResult>,
   createSale: (payload: SaleFormInput) => ipcRenderer.invoke('sales:create-sale', payload) as Promise<{ saleId: number }>,
+  registerAttendanceEntry: (payload: AttendanceFormInput) =>
+    ipcRenderer.invoke('attendance:register-entry', payload) as Promise<{ attendanceId: number }>,
+  registerAttendanceExit: (payload: AttendanceFormInput) =>
+    ipcRenderer.invoke('attendance:register-exit', payload) as Promise<{ attendanceId: number }>,
 
   // Auth & Admin
   login: (payload: AuthInput) => ipcRenderer.invoke('auth:login', payload) as Promise<AuthResult>,

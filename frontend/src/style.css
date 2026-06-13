@@ -230,6 +230,10 @@ body {
   padding: 14px;
 }
 
+.module-card--wide {
+  grid-column: 1 / -1;
+}
+
 .module-card__header {
   display: flex;
   justify-content: space-between;
@@ -480,6 +484,12 @@ body {
   color: #ffffff;
 }
 
+.button--danger {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: var(--danger);
+}
+
 .button--ghost {
   background: #ffffff;
 }
@@ -562,6 +572,43 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.attendance-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.attendance-actions .button {
+  min-height: 48px;
+  font-weight: 700;
+}
+
+.shift-state {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fafd;
+  padding: 12px;
+}
+
+.shift-state strong {
+  font-size: 1rem;
+}
+
+.shift-state span {
+  color: var(--muted);
+}
+
+.shift-state[data-state='in'] {
+  border-color: #bae6c9;
+  background: #f0fdf4;
+}
+
+.shift-state[data-state='out'] {
+  border-color: #dbe4f0;
 }
 
 .sale-form {
@@ -731,6 +778,10 @@ body {
     padding: 10px;
   }
 
+  .module-card__header {
+    flex-direction: column;
+  }
+
   .tabs__button {
     width: 100%;
   }
@@ -738,6 +789,10 @@ body {
   .form-grid,
   .info-list,
   .mini-stats,
+  .attendance-actions {
+    grid-template-columns: 1fr;
+  }
+
   .sale-summary {
     grid-template-columns: 1fr;
   }
