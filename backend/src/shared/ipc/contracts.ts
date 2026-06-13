@@ -155,6 +155,33 @@ export type SaleFormInput = {
   realizado_por?: number | null
 }
 
+export type InventoryAuditItemInput = {
+  id_producto: number
+  conteo_fisico: number
+  precio_costo?: number | null
+  precio_venta?: number | null
+}
+
+export type InventoryAuditInput = {
+  items: InventoryAuditItemInput[]
+  observacion?: string | null
+}
+
+export type InventoryAuditResultItem = {
+  id_producto: number
+  nombre: string
+  stock_sistema: number
+  conteo_fisico: number
+  diferencia: number
+  tipo_ajuste: 'AJUSTE_POS' | 'AJUSTE_NEG' | 'SIN_CAMBIO'
+}
+
+export type InventoryAuditResult = {
+  procesados: number
+  ajustados: number
+  detalles: InventoryAuditResultItem[]
+}
+
 export type RoleFormInput = {
   id_rol?: number | null
   nombre: string

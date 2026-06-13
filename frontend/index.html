@@ -73,7 +73,37 @@
 
         <div class="tab-panels">
             <section class="tab-panel is-active" data-panel="inventario" role="tabpanel">
-              <div class="module-layout">
+              <div class="inventory-toolbar">
+                <div>
+                  <h2 class="inventory-toolbar__title">Inventario</h2>
+                  <p class="inventory-toolbar__subtitle">Control en tiempo real de productos, precios y stock.</p>
+                </div>
+
+                <div class="inventory-toolbar__actions">
+                  <button class="button" id="inventory-refresh" type="button">Actualizar ahora</button>
+                  <button class="button button--primary" id="inventory-mode-toggle" type="button">Hacer inventario</button>
+                </div>
+              </div>
+
+              <section class="inventory-filterbar" aria-label="Filtros de inventario">
+                <label class="field field--inline">
+                  <span>Buscar producto</span>
+                  <input id="inventory-search" type="search" placeholder="Código o nombre..." />
+                </label>
+
+                <label class="field field--inline">
+                  <span>Buscar por</span>
+                  <select id="inventory-search-field">
+                    <option value="all">Código o nombre</option>
+                    <option value="codigo">Solo código</option>
+                    <option value="nombre">Solo nombre</option>
+                  </select>
+                </label>
+
+                <button class="button button--ghost" id="inventory-search-clear" type="button">Limpiar</button>
+              </section>
+
+              <div class="module-layout module-layout--inventory">
                 <section class="module-card">
                   <div class="module-card__header">
                     <div>
@@ -178,6 +208,60 @@
                       </thead>
                       <tbody></tbody>
                     </table>
+                  </div>
+                </section>
+
+                <section class="module-card inventory-mode" id="inventory-mode-panel" hidden>
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Modo inventario</span>
+                      <h2>Checklist físico por producto</h2>
+                    </div>
+                    <span class="module-badge">Semáforo de diferencias</span>
+                  </div>
+
+                  <p class="module-status" id="inventory-audit-status"></p>
+
+                  <div class="legend-row">
+                    <span class="legend-pill legend-pill--pending">Pendiente: falta revisar</span>
+                    <span class="legend-pill legend-pill--green">Verde: sin diferencia</span>
+                    <span class="legend-pill legend-pill--yellow">Amarillo: ligera diferencia</span>
+                    <span class="legend-pill legend-pill--red">Rojo: gran diferencia</span>
+                  </div>
+
+                  <label class="field field--inline inventory-audit-search">
+                    <span>Filtro checklist</span>
+                    <input id="inventory-audit-search" type="search" placeholder="Filtrar por código o nombre..." />
+                  </label>
+
+                  <div class="table-wrap">
+                    <table class="data-table" id="inventory-checklist-table">
+                      <thead>
+                        <tr>
+                          <th>Check</th>
+                          <th>Producto</th>
+                          <th>Stock sistema</th>
+                          <th>Conteo físico</th>
+                          <th>Diferencia</th>
+                          <th>Semáforo</th>
+                          <th>Precio costo</th>
+                          <th>Precio venta</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+
+                  <section class="comparison-panel">
+                    <h3>Comparación antes de cerrar inventario</h3>
+                    <div id="inventory-comparison" class="comparison-list">
+                      <p class="empty-state">Todavía no hay diferencias calculadas.</p>
+                    </div>
+                  </section>
+
+                  <div class="form-actions">
+                    <button class="button" id="inventory-audit-cancel" type="button">Cancelar</button>
+                    <button class="button button--primary" id="inventory-close" type="button">Cerrar inventario</button>
                   </div>
                 </section>
               </div>

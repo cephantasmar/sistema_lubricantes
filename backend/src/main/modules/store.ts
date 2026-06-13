@@ -1,6 +1,9 @@
 import type Database from 'better-sqlite3'
 import type {
   BootstrapData,
+  InventoryAuditInput,
+  InventoryAuditResult,
+  InventoryAuditResultItem,
   MovementFormInput,
   MovementRow,
   ProductFormInput,
@@ -608,6 +611,93 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
   return {
     saleId: transaction(input),
   }
+}
+
+export function closeInventory(database: Database.Database, input: InventoryAuditInput): InventoryAuditResult {
+  const transaction = database.transaction((payload: InventoryAuditInput) => {
+    const timestamp = nowSql()
+    const details: InventoryAuditResultItem[] = []
+    let adjusted = 0
+
+    for (const item of payload.items) {
+      const product = database
+        .prepare('SELECT id_producto, nombre FROM productos WHERE id_producto = ?')
+        .get(item.id_producto) as { id_producto: number; nombre: string } | undefined
+
+      if (!product) {
+        continue
+      }
+
+      const stockSistema = getProductStock(database, item.id_producto)
+      const conteoFisico = Number(item.conteo_fisico)
+      const diferencia = conteoFisico - stockSistema
+
+      let tipoAjuste: InventoryAuditResultItem['tipo_ajuste'] = 'SIN_CAMBIO'
+
+      if (diferencia > 0) {
+        tipoAjuste = 'AJUSTE_POS'
+      } else if (diferencia < 0) {
+        tipoAjuste = 'AJUSTE_NEG'
+      }
+
+      if (item.precio_costo !== undefined && item.precio_costo !== null) {
+        database
+          .prepare('UPDATE productos SET precio_costo = ?, actualizado_en = ? WHERE id_producto = ?')
+          .run(item.precio_costo, timestamp, item.id_producto)
+      }
+
+      if (item.precio_venta !== undefined && item.precio_venta !== null) {
+        database
+          .prepare('UPDATE productos SET precio_venta = ?, actualizado_en = ? WHERE id_producto = ?')
+          .run(item.precio_venta, timestamp, item.id_producto)
+      }
+
+      if (diferencia !== 0) {
+        const movementId = getNextId(database, 'inventario_movimientos', 'id_movimiento')
+
+        database
+          .prepare(
+            `
+            INSERT INTO inventario_movimientos (
+              id_movimiento, id_producto, tipo_movimiento, cantidad, costo_unitario, motivo,
+              referencia, observacion, realizado_por, fecha_movimiento
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          )
+          .run(
+            movementId,
+            item.id_producto,
+            tipoAjuste,
+            Math.abs(diferencia),
+            item.precio_costo ?? null,
+            'Cierre de inventario físico',
+            `INV-${timestamp.slice(0, 10).replaceAll('-', '')}`,
+            normalizeText(payload.observacion) ?? 'Ajuste automático por cierre de inventario',
+            SYSTEM_USER_ID,
+            timestamp,
+          )
+
+        adjusted += 1
+      }
+
+      details.push({
+        id_producto: item.id_producto,
+        nombre: product.nombre,
+        stock_sistema: stockSistema,
+        conteo_fisico: conteoFisico,
+        diferencia,
+        tipo_ajuste: tipoAjuste,
+      })
+    }
+
+    return {
+      procesados: details.length,
+      ajustados: adjusted,
+      detalles: details,
+    }
+  })
+
+  return transaction(input)
 }
 
 function getProductStock(database: Database.Database, productId: number) {
