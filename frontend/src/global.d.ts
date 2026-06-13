@@ -8,6 +8,11 @@ import type {
   MovementFormInput,
   ProductFormInput,
   SaleFormInput,
+  AuthInput,
+  AuthResult,
+  RoleFormInput,
+  WorkerFormInput,
+  AttendanceInput
 } from '@shared/ipc/contracts'
 
 declare global {
@@ -19,6 +24,10 @@ declare global {
       createMovement: (payload: MovementFormInput) => Promise<{ movementId: number }>
       closeInventory: (payload: InventoryAuditInput) => Promise<InventoryAuditResult>
       createSale: (payload: SaleFormInput) => Promise<{ saleId: number }>
+      login: (payload: AuthInput) => Promise<AuthResult>
+      saveRole: (payload: RoleFormInput) => Promise<{ roleId: number }>
+      saveWorker: (payload: WorkerFormInput) => Promise<{ workerId: number }>
+      recordAttendance: (payload: AttendanceInput) => Promise<{ attendanceId: number }>
     }
   }
 }
