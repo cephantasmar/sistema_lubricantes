@@ -101,7 +101,7 @@ function formatDateTime(value: string) {
 function normalizeSearchValue(value: string) {
   return value
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase()
 }
@@ -760,7 +760,7 @@ function renderProductSearchResults(query = '') {
     .slice(0, 8)
 
   if (products.length === 0) {
-    container.innerHTML = '<p class="empty-state">No hay productos disponibles para esa busqueda.</p>'
+    container.innerHTML = '<p class="empty-state">No hay productos disponibles para esa búsqueda.</p>'
     return
   }
 
