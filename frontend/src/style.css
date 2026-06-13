@@ -574,7 +574,6 @@ body {
   gap: 8px;
 }
 
-<<<<<<< HEAD
 .attendance-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -610,7 +609,8 @@ body {
 
 .shift-state[data-state='out'] {
   border-color: #dbe4f0;
-=======
+}
+
 .sale-form {
   display: grid;
   gap: 12px;
@@ -702,7 +702,6 @@ body {
 
 .sale-summary strong {
   margin-top: 4px;
->>>>>>> origin/SPRINT1
 }
 
 .mini-stats {
@@ -790,11 +789,11 @@ body {
   .form-grid,
   .info-list,
   .mini-stats,
-<<<<<<< HEAD
   .attendance-actions {
-=======
+    grid-template-columns: 1fr;
+  }
+
   .sale-summary {
->>>>>>> origin/SPRINT1
     grid-template-columns: 1fr;
   }
 }

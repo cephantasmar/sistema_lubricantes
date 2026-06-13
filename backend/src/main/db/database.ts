@@ -45,18 +45,6 @@ function seedDatabase(databaseInstance: Database.Database) {
     "INSERT OR IGNORE INTO metodos_pago (id_metodo, nombre, estado) VALUES (1, 'Efectivo', 1)",
     "INSERT OR IGNORE INTO metodos_pago (id_metodo, nombre, estado) VALUES (2, 'Tarjeta', 1)",
     "INSERT OR IGNORE INTO metodos_pago (id_metodo, nombre, estado) VALUES (3, 'Transferencia', 1)",
-<<<<<<< HEAD
-    "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (1, 'Mañana', '08:00', '12:00', 'Turno de apertura', 1)",
-    "UPDATE turnos SET nombre = 'Mañana' WHERE id_turno = 1",
-    "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (2, 'Tarde', '14:00', '18:00', 'Turno de cierre', 1)",
-    "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (3, 'Completo', '08:00', '18:00', 'Jornada completa', 1)",
-    `INSERT OR IGNORE INTO usuarios (id_usuario, username, email, password_hash, estado, ultimo_acceso, creado_en, actualizado_en) VALUES (1, 'system', 'system@local', 'system', 'activo', NULL, '${now}', NULL)`,
-    `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (1, 1, '00000000', 'Sistema', 'Operador', NULL, NULL, '${todayDisplaySql()}', NULL, 'Sistema', 0, 'activo', '${now}', NULL)`,
-    `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (2, NULL, '10000001', 'Ana', 'Rojas', '70000001', 'Sucursal central', '${todayDisplaySql()}', NULL, 'Vendedora', 0, 'activo', '${now}', NULL)`,
-    `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (3, NULL, '10000002', 'Carlos', 'Mendoza', '70000002', 'Sucursal central', '${todayDisplaySql()}', NULL, 'Encargado de inventario', 0, 'activo', '${now}', NULL)`,
-    `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (4, NULL, '10000003', 'Lucia', 'Fernandez', '70000003', 'Sucursal central', '${todayDisplaySql()}', NULL, 'Cajera', 0, 'activo', '${now}', NULL)`,
-    "UPDATE asistencias SET fecha = substr(fecha, 9, 2) || '-' || substr(fecha, 6, 2) || '-' || substr(fecha, 1, 4) WHERE fecha GLOB '????-??-??'"
-=======
     `INSERT OR IGNORE INTO roles (id_rol, nombre, descripcion, estado, creado_en) VALUES (1, 'Administrador', 'Rol principal con acceso total', 1, '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (1, 'VER_INVENTARIO', 'Ver catálogo y stock', 'INVENTARIO', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (2, 'GESTIONAR_INVENTARIO', 'Crear y editar productos', 'INVENTARIO', '${now}')`,
@@ -69,10 +57,17 @@ function seedDatabase(databaseInstance: Database.Database) {
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (9, 'GESTIONAR_ROLES', 'Crear y asignar roles (RBAC)', 'ADMINISTRACION', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (10, 'GESTIONAR_TRABAJADORES', 'Añadir y editar personal', 'ADMINISTRACION', '${now}')`,
     `INSERT OR IGNORE INTO rol_permiso (id_rol, id_permiso) SELECT 1, id_permiso FROM permisos`,
+    "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (1, 'Mañana', '08:00', '12:00', 'Turno de apertura', 1)",
+    "UPDATE turnos SET nombre = 'Mañana' WHERE id_turno = 1",
+    "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (2, 'Tarde', '14:00', '18:00', 'Turno de cierre', 1)",
+    "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (3, 'Completo', '08:00', '18:00', 'Jornada completa', 1)",
     `INSERT OR IGNORE INTO usuarios (id_usuario, username, email, password_hash, estado, ultimo_acceso, creado_en, actualizado_en) VALUES (1, 'system', 'system@local', 'system', 'activo', NULL, '${now}', NULL)`,
     `INSERT OR IGNORE INTO usuario_rol (id_usuario, id_rol) VALUES (1, 1)`,
-    `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (1, 1, '00000000', 'Sistema', 'Operador', NULL, NULL, date('now'), NULL, 'Sistema', 0, 'activo', '${now}', NULL)`
->>>>>>> origin/SPRINT1
+    `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (1, 1, '00000000', 'Sistema', 'Operador', NULL, NULL, '${todayDisplaySql()}', NULL, 'Sistema', 0, 'activo', '${now}', NULL)`,
+    `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (2, NULL, '10000001', 'Ana', 'Rojas', '70000001', 'Sucursal central', '${todayDisplaySql()}', NULL, 'Vendedora', 0, 'activo', '${now}', NULL)`,
+    `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (3, NULL, '10000002', 'Carlos', 'Mendoza', '70000002', 'Sucursal central', '${todayDisplaySql()}', NULL, 'Encargado de inventario', 0, 'activo', '${now}', NULL)`,
+    `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (4, NULL, '10000003', 'Lucia', 'Fernandez', '70000003', 'Sucursal central', '${todayDisplaySql()}', NULL, 'Cajera', 0, 'activo', '${now}', NULL)`,
+    "UPDATE asistencias SET fecha = substr(fecha, 9, 2) || '-' || substr(fecha, 6, 2) || '-' || substr(fecha, 1, 4) WHERE fecha GLOB '????-??-??'"
   ]
 
   const testProducts = [

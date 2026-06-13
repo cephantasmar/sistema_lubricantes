@@ -13,16 +13,12 @@ import type {
   ReferenceItem,
   SaleFormInput,
   SaleRow,
-<<<<<<< HEAD
   ShiftRow,
   WorkerRow,
   WorkHoursSummaryRow,
-=======
   RoleRow,
-  WorkerRow,
   AuditLogRow,
   PermissionRow,
->>>>>>> origin/SPRINT1
 } from '../../shared/ipc/contracts'
 
 const SYSTEM_USER_ID = 1
@@ -410,9 +406,12 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
     products,
     movements,
     sales,
-<<<<<<< HEAD
     attendances,
     workHoursSummary,
+    roles,
+    workers,
+    auditLogs,
+    permissions,
   }
 }
 
@@ -501,12 +500,6 @@ export function registerAttendanceExit(database: Database.Database, input: Atten
 
   return {
     attendanceId: transaction(input),
-=======
-    roles,
-    workers,
-    auditLogs,
-    permissions
->>>>>>> origin/SPRINT1
   }
 }
 
@@ -677,17 +670,9 @@ export function createMovement(database: Database.Database, input: MovementFormI
 
 export function createSale(database: Database.Database, input: SaleFormInput) {
   const transaction = database.transaction((payload: SaleFormInput) => {
-<<<<<<< HEAD
-    assertRequiredId(payload.id_producto, 'un producto')
-    assertRequiredId(payload.id_metodo_pago, 'un metodo de pago')
-    assertRequiredId(payload.id_moneda, 'una moneda')
-    assertPositiveNumber(payload.cantidad, 'La cantidad')
-    assertNonNegativeNumber(payload.descuento_total ?? 0, 'El descuento total')
-=======
     if (!payload.detalles.length) {
       throw new Error('La venta debe tener al menos un producto.')
     }
->>>>>>> origin/SPRINT1
 
     if (payload.id_metodo_pago <= 0) {
       throw new Error('Debe seleccionar un método de pago.')

@@ -67,12 +67,9 @@
           <button class="tabs__button is-active" type="button" data-tab="inventario" role="tab" aria-selected="true">Inventario</button>
           <button class="tabs__button" type="button" data-tab="movimientos" role="tab" aria-selected="false">Movimientos</button>
           <button class="tabs__button" type="button" data-tab="ventas" role="tab" aria-selected="false">Ventas</button>
-<<<<<<< HEAD
           <button class="tabs__button" type="button" data-tab="turnos" role="tab" aria-selected="false">Turnos</button>
-=======
           <button class="tabs__button" type="button" data-tab="asistencias" role="tab" aria-selected="false">Asistencias</button>
           <button class="tabs__button" type="button" data-tab="administracion" role="tab" aria-selected="false">Administración</button>
->>>>>>> origin/SPRINT1
         </nav>
 
         <div class="tab-panels">
@@ -471,16 +468,11 @@
               </div>
             </section>
 
-<<<<<<< HEAD
           <section class="tab-panel" data-panel="turnos" role="tabpanel">
-=======
-          <section class="tab-panel" data-panel="asistencias" role="tabpanel">
->>>>>>> origin/SPRINT1
               <div class="module-layout">
                 <section class="module-card">
                   <div class="module-card__header">
                     <div>
-<<<<<<< HEAD
                       <span class="module-kicker">Asistencia</span>
                       <h2>Registrar entrada o salida</h2>
                     </div>
@@ -537,13 +529,47 @@
                           <th>Observacion</th>
                         </tr>
                       </thead>
-=======
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section class="module-card module-card--wide">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Pago de personal</span>
+                      <h2>Horas trabajadas por empleado</h2>
+                    </div>
+                  </div>
+
+                  <div class="table-wrap">
+                    <table class="data-table" id="work-hours-table">
+                      <thead>
+                        <tr>
+                          <th>Trabajador</th>
+                          <th>Cargo</th>
+                          <th>Asistencias cerradas</th>
+                          <th>Horas trabajadas</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+          </section>
+
+          <section class="tab-panel" data-panel="asistencias" role="tabpanel">
+              <div class="module-layout">
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
                       <span class="module-kicker">Control horario</span>
                       <h2>Registrar Asistencia</h2>
                     </div>
                   </div>
                   <p class="module-status" id="attendance-status"></p>
-                  <form id="attendance-form" class="form-grid">
+                  <form id="attendance-form-simple" class="form-grid">
                     <div class="form-actions field--wide" style="display: flex; gap: 1rem;">
                       <button class="button button--primary" type="button" id="btn-entrada" style="flex: 1;">Registrar Entrada</button>
                       <button class="button button--primary" type="button" id="btn-salida" style="flex: 1;">Registrar Salida</button>
@@ -591,32 +617,11 @@
                   <div class="table-wrap" style="margin-top: 1rem;">
                     <table class="data-table" id="roles-table">
                       <thead><tr><th>Nombre</th><th>Descripción</th><th>Estado</th><th>Acciones</th></tr></thead>
->>>>>>> origin/SPRINT1
                       <tbody></tbody>
                     </table>
                   </div>
                 </section>
 
-<<<<<<< HEAD
-                <section class="module-card module-card--wide">
-                  <div class="module-card__header">
-                    <div>
-                      <span class="module-kicker">Pago de personal</span>
-                      <h2>Horas trabajadas por empleado</h2>
-                    </div>
-                  </div>
-
-                  <div class="table-wrap">
-                    <table class="data-table" id="work-hours-table">
-                      <thead>
-                        <tr>
-                          <th>Trabajador</th>
-                          <th>Cargo</th>
-                          <th>Asistencias cerradas</th>
-                          <th>Horas trabajadas</th>
-                        </tr>
-                      </thead>
-=======
                 <section class="module-card">
                   <div class="module-card__header">
                     <div>
@@ -684,18 +689,12 @@
                   <div class="table-wrap">
                     <table class="data-table" id="audit-table">
                       <thead><tr><th>Fecha</th><th>Usuario</th><th>Módulo</th><th>Acción</th><th>Detalle</th></tr></thead>
->>>>>>> origin/SPRINT1
                       <tbody></tbody>
                     </table>
                   </div>
                 </section>
               </div>
-<<<<<<< HEAD
-            </section>
-=======
           </section>
-
->>>>>>> origin/SPRINT1
         </div>
       </main>
     </div>

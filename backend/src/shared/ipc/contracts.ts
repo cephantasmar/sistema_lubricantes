@@ -114,13 +114,6 @@ export type AuthInput = {
   password_plain: string
 }
 
-export type WorkerRow = {
-  id_trabajador: number
-  nombre_completo: string
-  cargo: string | null
-  estado: string
-}
-
 export type ShiftRow = {
   id_turno: number
   nombre: string
@@ -192,14 +185,12 @@ export type SaleFormInput = {
   realizado_por?: number | null
 }
 
-<<<<<<< HEAD
 export type AttendanceFormInput = {
   id_trabajador: number
   id_turno?: number | null
   observacion?: string | null
 }
 
-=======
 export type InventoryAuditItemInput = {
   id_producto: number
   conteo_fisico: number
@@ -251,7 +242,6 @@ export type AttendanceInput = {
   tipo: 'ENTRADA' | 'SALIDA'
 }
 
->>>>>>> origin/SPRINT1
 export type BootstrapData = {
   references: {
     marcas: ReferenceItem[]
@@ -272,13 +262,10 @@ export type BootstrapData = {
   products: ProductRow[]
   movements: MovementRow[]
   sales: SaleRow[]
-<<<<<<< HEAD
   attendances: AttendanceRow[]
   workHoursSummary: WorkHoursSummaryRow[]
-=======
   roles: RoleRow[]
   workers: WorkerRow[]
   auditLogs: AuditLogRow[]
   permissions: PermissionRow[]
->>>>>>> origin/SPRINT1
 }

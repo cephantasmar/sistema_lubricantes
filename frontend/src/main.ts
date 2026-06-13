@@ -1,19 +1,20 @@
 import './style.css'
-<<<<<<< HEAD
-import type { AttendanceFormInput, BootstrapData, MovementFormInput, ProductFormInput, SaleFormInput } from '@shared/ipc/contracts'
-
-type TabName = 'inventario' | 'movimientos' | 'ventas' | 'turnos'
-=======
-
 import type {
+  AttendanceFormInput,
+  AttendanceInput,
+  AuthInput,
+  AuthResult,
   BootstrapData,
   InventoryAuditInput,
   MovementFormInput,
   ProductFormInput,
   ProductRow,
+  RoleFormInput,
   SaleFormInput,
+  WorkerFormInput,
 } from '@shared/ipc/contracts'
->>>>>>> origin/SPRINT1
+
+type TabName = 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion'
 
 type TabName = 'inventario' | 'movimientos' | 'ventas' | 'asistencias' | 'administracion'
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
@@ -76,13 +77,13 @@ function formatNumber(value: number) {
   }).format(value)
 }
 
-<<<<<<< HEAD
 function formatHours(value: number) {
   return new Intl.NumberFormat('es-EC', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)
-=======
+}
+
 function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100
 }
@@ -101,7 +102,6 @@ function getSaleSubtotal() {
   return roundMoney(
     Array.from(saleCart.values()).reduce((sum, item) => sum + Number(item.product.precio_venta) * item.cantidad, 0),
   )
->>>>>>> origin/SPRINT1
 }
 
 function formatDateTime(value: string) {
@@ -111,7 +111,6 @@ function formatDateTime(value: string) {
   }).format(new Date(value))
 }
 
-<<<<<<< HEAD
 function formatTime(value: string | null) {
   if (!value) {
     return 'Pendiente'
@@ -127,7 +126,8 @@ function getFormValues<T extends HTMLElement>(form: HTMLFormElement) {
   return new FormData(form) as unknown as FormData & {
     get(name: string): FormDataEntryValue | null
   }
-=======
+}
+
 
 function normalizeSearchValue(value: string) {
   return value
@@ -135,7 +135,6 @@ function normalizeSearchValue(value: string) {
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase()
->>>>>>> origin/SPRINT1
 }
 
 function matchesProductSearch(product: BootstrapData['products'][number], searchTerm: string, field: InventorySearchField) {
@@ -195,18 +194,8 @@ function renderMetricCards(data: BootstrapData) {
 function renderAppInfo(data: BootstrapData) {
   const container = document.querySelector<HTMLDivElement>('#app-info')
 
-<<<<<<< HEAD
-  if (container) {
-    container.innerHTML = `
-      <div class="info-item"><span>Marca</span><strong>${escapeHtml(data.references.marcas.length)}</strong></div>
-      <div class="info-item"><span>Categorías</span><strong>${escapeHtml(data.references.categorias.length)}</strong></div>
-      <div class="info-item"><span>Métodos de pago</span><strong>${escapeHtml(data.references.metodosPago.length)}</strong></div>
-      <div class="info-item"><span>Trabajadores</span><strong>${escapeHtml(data.references.trabajadores.length)}</strong></div>
-    `
-=======
 if (!container) {
     return
->>>>>>> origin/SPRINT1
   }
 
   container.innerHTML = `
@@ -461,7 +450,6 @@ function renderSalesTable(data: BootstrapData) {
     .join('')
 }
 
-<<<<<<< HEAD
 function renderAttendanceState(data: BootstrapData) {
   const form = document.querySelector<HTMLFormElement>('#attendance-form')
   const state = document.querySelector<HTMLDivElement>('#attendance-current-state')
@@ -592,11 +580,6 @@ function renderWorkHoursTable(data: BootstrapData) {
     })
     .join('')
 }
-
-function fillProductForm(product: BootstrapData['products'][number]) {
-  const form = document.querySelector<HTMLFormElement>('#product-form')
-=======
->>>>>>> origin/SPRINT1
 
 function semaforoForDifference(stockSistema: number, conteoFisico: number): Semaforo {
   const diff = Math.abs(conteoFisico - stockSistema)
@@ -1272,13 +1255,10 @@ async function refresh() {
   renderProductsTable(bootstrapData)
   renderMovementsTable(bootstrapData)
   renderSalesTable(bootstrapData)
-<<<<<<< HEAD
   renderAttendanceState(bootstrapData)
   renderAttendanceTable(bootstrapData)
   renderWorkHoursTable(bootstrapData)
-=======
-
-renderRolesTable(bootstrapData)
+  renderRolesTable(bootstrapData)
   renderWorkersTable(bootstrapData)
   renderAuditTable(bootstrapData)
   if (!inventoryAuditMode) {
@@ -1289,7 +1269,6 @@ renderRolesTable(bootstrapData)
   updateInventoryAuditStatus(bootstrapData)
   renderProductSearchResults((document.querySelector<HTMLInputElement>('#sale-product-search')?.value ?? '').trim())
   renderSaleCart()
->>>>>>> origin/SPRINT1
 }
 
 async function bootstrap() {
@@ -1301,15 +1280,12 @@ async function bootstrap() {
   const productForm = document.querySelector<HTMLFormElement>('#product-form')
   const movementForm = document.querySelector<HTMLFormElement>('#movement-form')
   const saleForm = document.querySelector<HTMLFormElement>('#sale-form')
-<<<<<<< HEAD
   const attendanceForm = document.querySelector<HTMLFormElement>('#attendance-form')
   let attendanceAction: 'entry' | 'exit' = 'entry'
-=======
   const roleForm = document.querySelector<HTMLFormElement>('#role-form')
   const workerForm = document.querySelector<HTMLFormElement>('#worker-form')
   const saleSearchInput = document.querySelector<HTMLInputElement>('#sale-product-search')
   const saleDiscountInput = document.querySelector<HTMLInputElement>('#sale-form input[name="descuento_total"]')
->>>>>>> origin/SPRINT1
 
   document.querySelector<HTMLButtonElement>('#product-form-reset')?.addEventListener('click', () => {
     resetProductForm()
@@ -1326,8 +1302,6 @@ async function bootstrap() {
       return
     }
 
-<<<<<<< HEAD
-=======
     setInventoryAuditMode(true)
     resetInventoryAuditRows(bootstrapData)
     renderInventoryChecklist(bootstrapData)
@@ -1358,24 +1332,6 @@ async function bootstrap() {
 
   productForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
-    if (!bootstrapData) return
-    const formData = new FormData(productForm)
-    const payload: ProductFormInput = {
-      id_producto: productFormState.id_producto,
-      codigo: String(formData.get('codigo') ?? ''),
-      codigo_barra: String(formData.get('codigo_barra') ?? '').trim() || null,
-      nombre: String(formData.get('nombre') ?? ''),
-      id_marca: Number(formData.get('id_marca') ?? 0),
-      id_categoria: formData.get('id_categoria') ? Number(formData.get('id_categoria')) : null,
-      descripcion: String(formData.get('descripcion') ?? '').trim() || null,
-      precio_costo: Number(formData.get('precio_costo') ?? 0),
-      precio_venta: Number(formData.get('precio_venta') ?? 0),
-      stock_minimo: Number(formData.get('stock_minimo') ?? 0),
-      unidad_medida: String(formData.get('unidad_medida') ?? ''),
-      estado: (formData.get('estado') as FormDataEntryValue | null) !== null,
-      stock_inicial: Number(formData.get('stock_inicial') ?? 0),
-    }
->>>>>>> origin/SPRINT1
     try {
       const formData = new FormData(productForm)
       const payload: ProductFormInput = {
@@ -1405,20 +1361,7 @@ async function bootstrap() {
 
   movementForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
-<<<<<<< HEAD
 
-=======
-    const formData = new FormData(movementForm)
-    const payload: MovementFormInput = {
-      id_producto: Number(formData.get('id_producto') ?? 0),
-      tipo_movimiento: String(formData.get('tipo_movimiento') ?? ''),
-      cantidad: Number(formData.get('cantidad') ?? 0),
-      costo_unitario: String(formData.get('costo_unitario') ?? '').trim() ? Number(formData.get('costo_unitario')) : null,
-      motivo: String(formData.get('motivo') ?? '').trim() || null,
-      referencia: String(formData.get('referencia') ?? '').trim() || null,
-      observacion: String(formData.get('observacion') ?? '').trim() || null,
-    }
->>>>>>> origin/SPRINT1
     try {
       const formData = new FormData(movementForm)
       const payload: MovementFormInput = {
@@ -1456,9 +1399,6 @@ async function bootstrap() {
 
   saleForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
-<<<<<<< HEAD
-
-=======
     const formData = new FormData(saleForm)
     const subtotal = getSaleSubtotal()
     const discountTotal = String(formData.get('descuento_total') ?? '').trim()
@@ -1490,18 +1430,7 @@ async function bootstrap() {
       id_moneda: Number(formData.get('id_moneda') ?? 0),
       observacion: String(formData.get('observacion') ?? '').trim() || null,
     }
->>>>>>> origin/SPRINT1
     try {
-      const formData = new FormData(saleForm)
-      const payload: SaleFormInput = {
-        id_producto: readRequiredId(formData, 'id_producto', 'El producto'),
-        cantidad: readRequiredNumber(formData, 'cantidad', 'La cantidad', { positive: true }),
-        descuento_total: readOptionalNumber(formData, 'descuento_total', 'El descuento total') ?? 0,
-        id_metodo_pago: readRequiredId(formData, 'id_metodo_pago', 'El metodo de pago'),
-        id_moneda: readRequiredId(formData, 'id_moneda', 'La moneda'),
-        observacion: String(formData.get('observacion') ?? '').trim() || null,
-      }
-
       await window.inventoryApi.createSale(payload)
       setStatus('sale-status', 'Venta registrada correctamente.', 'success')
       saleCart.clear()
