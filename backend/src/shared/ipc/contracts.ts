@@ -57,15 +57,14 @@ export type SaleRow = {
   id_venta: number
   numero_factura: string
   fecha_venta: string
-  producto_nombre: string
-  cantidad: number
+  productos_diferentes: number
+  cantidad_total: number
   subtotal: number
   descuento_total: number
   total: number
   metodo_pago: string
   moneda: string
   estado: string
-  vendedor: string
 }
 
 export type RoleRow = {
@@ -142,9 +141,13 @@ export type MovementFormInput = {
   realizado_por?: number | null
 }
 
-export type SaleFormInput = {
+export type SaleDetailInput = {
   id_producto: number
   cantidad: number
+}
+
+export type SaleFormInput = {
+  detalles: SaleDetailInput[]
   descuento_total?: number | null
   id_metodo_pago: number
   id_moneda: number

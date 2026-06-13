@@ -272,28 +272,46 @@
             </section>
 
           <section class="tab-panel" data-panel="ventas" role="tabpanel">
-              <div class="module-layout">
-                <section class="module-card">
+              <div class="sales-layout">
+                <section class="module-card sales-register">
                   <div class="module-card__header">
                     <div>
                       <span class="module-kicker">Caja</span>
-                      <h2>Registrar venta simple</h2>
+                      <h2>Registrar venta</h2>
                     </div>
                   </div>
 
                   <p class="module-status" id="sale-status"></p>
 
-                  <form id="sale-form" class="form-grid">
-                    <label class="field">
-                      <span>Producto</span>
-                      <select name="id_producto" required></select>
-                    </label>
+                  <form id="sale-form" class="sale-form">
+                    <div class="sale-product-search">
+                      <label class="field">
+                        <span>Buscar producto</span>
+                        <input id="sale-product-search" type="search" placeholder="Codigo, barra, nombre o marca" autocomplete="off" />
+                      </label>
 
-                    <label class="field">
-                      <span>Cantidad</span>
-                      <input name="cantidad" type="number" step="0.01" min="0.01" required />
-                    </label>
+                      <div class="product-results" id="sale-product-results"></div>
+                    </div>
 
+                    <div class="table-wrap cart-wrap">
+                      <table class="data-table cart-table" id="sale-cart-table">
+                        <thead>
+                          <tr>
+                            <th>Producto</th>
+                            <th>Stock</th>
+                            <th>Cantidad</th>
+                            <th>Precio unitario</th>
+                            <th>Subtotal</th>
+                            <th>Total linea</th>
+                            <th>Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody></tbody>
+                      </table>
+                    </div>
+
+                    <div class="sale-checkout">
+                      <div class="form-grid">
                     <label class="field">
                       <span>Método de pago</span>
                       <select name="id_metodo_pago" required></select>
@@ -309,13 +327,29 @@
                       <input name="descuento_total" type="number" step="0.01" min="0" value="0" />
                     </label>
 
+                    <label class="field">
+                      <span>Total</span>
+                      <output id="sale-total-output">0.00</output>
+                    </label>
+
                     <label class="field field--wide">
                       <span>Observación</span>
                       <textarea name="observacion" rows="3" placeholder="Nota opcional para la venta"></textarea>
                     </label>
 
-                    <div class="form-actions field--wide">
-                      <button class="button button--primary" type="submit">Guardar venta</button>
+                      </div>
+
+                      <div class="sale-summary" aria-label="Resumen de venta">
+                        <div><span>Productos</span><strong id="sale-summary-products">0</strong></div>
+                        <div><span>Unidades</span><strong id="sale-summary-units">0.00</strong></div>
+                        <div><span>Subtotal</span><strong id="sale-summary-subtotal">0.00</strong></div>
+                        <div><span>Descuento</span><strong id="sale-summary-discount">0.00</strong></div>
+                      </div>
+
+                      <div class="form-actions">
+                        <button class="button button--ghost" id="sale-cart-clear" type="button">Limpiar</button>
+                        <button class="button button--primary" type="submit">Confirmar venta</button>
+                      </div>
                     </div>
                   </form>
                 </section>
@@ -335,11 +369,11 @@
                         <tr>
                           <th>Factura</th>
                           <th>Fecha</th>
-                          <th>Producto</th>
-                          <th>Cantidad</th>
+                          <th>Productos</th>
+                          <th>Unidades</th>
                           <th>Total</th>
                           <th>Pago</th>
-                          <th>Vendedor</th>
+                          <th>Estado</th>
                         </tr>
                       </thead>
                       <tbody></tbody>
