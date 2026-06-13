@@ -3,6 +3,9 @@ import type {
   AttendanceFormInput,
   AttendanceRow,
   BootstrapData,
+  InventoryAuditInput,
+  InventoryAuditResult,
+  InventoryAuditResultItem,
   MovementFormInput,
   MovementRow,
   ProductFormInput,
@@ -10,9 +13,16 @@ import type {
   ReferenceItem,
   SaleFormInput,
   SaleRow,
+<<<<<<< HEAD
   ShiftRow,
   WorkerRow,
   WorkHoursSummaryRow,
+=======
+  RoleRow,
+  WorkerRow,
+  AuditLogRow,
+  PermissionRow,
+>>>>>>> origin/SPRINT1
 } from '../../shared/ipc/contracts'
 
 const SYSTEM_USER_ID = 1
@@ -81,6 +91,10 @@ function todaySql() {
 
 function toNumber(value: unknown) {
   return Number(value ?? 0)
+}
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
 function normalizeText(value: string | null | undefined) {
@@ -257,22 +271,32 @@ export function listSales(database: Database.Database): SaleRow[] {
         v.id_venta,
         v.numero_factura,
         v.fecha_venta,
-        p.nombre AS producto_nombre,
-        d.cantidad,
+        COALESCE(det.productos_diferentes, 0) AS productos_diferentes,
+        COALESCE(det.cantidad_total, 0) AS cantidad_total,
         v.subtotal,
         v.descuento_total,
         v.total,
-        mp.nombre AS metodo_pago,
+        COALESCE(pay.metodo_pago, 'Sin pago') AS metodo_pago,
         mo.codigo || COALESCE(' ' || mo.simbolo, '') AS moneda,
-        v.estado,
-        COALESCE(t.nombres || ' ' || t.apellidos, 'Sistema') AS vendedor
+        v.estado
       FROM ventas v
-      INNER JOIN venta_detalles d ON d.id_venta = v.id_venta
-      INNER JOIN productos p ON p.id_producto = d.id_producto
-      INNER JOIN pagos_venta pv ON pv.id_venta = v.id_venta
-      INNER JOIN metodos_pago mp ON mp.id_metodo = pv.id_metodo_pago
-      INNER JOIN monedas mo ON mo.id_moneda = pv.id_moneda
-      INNER JOIN trabajadores t ON t.id_trabajador = v.id_vendedor
+      LEFT JOIN (
+        SELECT
+          id_venta,
+          COUNT(*) AS productos_diferentes,
+          SUM(cantidad) AS cantidad_total
+        FROM venta_detalles
+        GROUP BY id_venta
+      ) det ON det.id_venta = v.id_venta
+      LEFT JOIN (
+        SELECT
+          pv.id_venta,
+          MIN(mp.nombre) AS metodo_pago
+        FROM pagos_venta pv
+        INNER JOIN metodos_pago mp ON mp.id_metodo = pv.id_metodo_pago
+        GROUP BY pv.id_venta
+      ) pay ON pay.id_venta = v.id_venta
+      INNER JOIN monedas mo ON mo.id_moneda = v.id_moneda
       ORDER BY v.fecha_venta DESC, v.id_venta DESC
       LIMIT 50
     `,
@@ -348,6 +372,28 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
   const workHoursSummary = listWorkHoursSummary(database)
   const references = getReferenceData(database)
 
+  const rolesData = database.prepare('SELECT id_rol, nombre, descripcion, estado, creado_en FROM roles ORDER BY id_rol ASC').all() as RoleRow[]
+  const rolPermisos = database.prepare('SELECT id_rol, id_permiso FROM rol_permiso').all() as {id_rol: number, id_permiso: number}[]
+  const roles = rolesData.map(role => ({
+    ...role,
+    permisos: rolPermisos.filter(rp => rp.id_rol === role.id_rol).map(rp => rp.id_permiso)
+  }))
+
+  const workers = database.prepare(`
+    SELECT t.id_trabajador, t.id_usuario, t.cedula, t.nombres, t.apellidos, t.cargo, t.salario_base, t.estado, t.creado_en, ur.id_rol 
+    FROM trabajadores t
+    LEFT JOIN usuario_rol ur ON ur.id_usuario = t.id_usuario
+    ORDER BY t.nombres ASC
+  `).all() as WorkerRow[]
+  const auditLogs = database.prepare(`
+    SELECT l.id_log, COALESCE(u.username, 'Sistema') AS usuario, l.accion, l.modulo, l.descripcion, l.fecha_evento 
+    FROM auditoria_logs l 
+    LEFT JOIN usuarios u ON u.id_usuario = l.id_usuario 
+    ORDER BY l.fecha_evento DESC LIMIT 50
+  `).all() as AuditLogRow[]
+  
+  const permissions = database.prepare('SELECT id_permiso, nombre, descripcion, modulo, creado_en FROM permisos ORDER BY modulo ASC, nombre ASC').all() as PermissionRow[]
+
   const totalStock = products.reduce((sum, product) => sum + toNumber(product.stock_actual), 0)
   const lowStockProducts = products.filter((product) => toNumber(product.stock_actual) <= toNumber(product.stock_minimo)).length
 
@@ -364,6 +410,7 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
     products,
     movements,
     sales,
+<<<<<<< HEAD
     attendances,
     workHoursSummary,
   }
@@ -454,6 +501,12 @@ export function registerAttendanceExit(database: Database.Database, input: Atten
 
   return {
     attendanceId: transaction(input),
+=======
+    roles,
+    workers,
+    auditLogs,
+    permissions
+>>>>>>> origin/SPRINT1
   }
 }
 
@@ -624,37 +677,115 @@ export function createMovement(database: Database.Database, input: MovementFormI
 
 export function createSale(database: Database.Database, input: SaleFormInput) {
   const transaction = database.transaction((payload: SaleFormInput) => {
+<<<<<<< HEAD
     assertRequiredId(payload.id_producto, 'un producto')
     assertRequiredId(payload.id_metodo_pago, 'un metodo de pago')
     assertRequiredId(payload.id_moneda, 'una moneda')
     assertPositiveNumber(payload.cantidad, 'La cantidad')
     assertNonNegativeNumber(payload.descuento_total ?? 0, 'El descuento total')
+=======
+    if (!payload.detalles.length) {
+      throw new Error('La venta debe tener al menos un producto.')
+    }
+>>>>>>> origin/SPRINT1
 
-    const product = database
-      .prepare('SELECT id_producto, nombre, precio_costo, precio_venta FROM productos WHERE id_producto = ?')
-      .get(payload.id_producto) as
-      | { id_producto: number; nombre: string; precio_costo: number; precio_venta: number }
+    if (payload.id_metodo_pago <= 0) {
+      throw new Error('Debe seleccionar un método de pago.')
+    }
+
+    if (payload.id_moneda <= 0) {
+      throw new Error('Debe seleccionar una moneda.')
+    }
+
+    const normalizedDetails = new Map<number, number>()
+
+    payload.detalles.forEach((detail) => {
+      const productId = Number(detail.id_producto)
+      const quantity = Number(detail.cantidad)
+
+      if (!Number.isFinite(productId) || productId <= 0) {
+        throw new Error('La venta contiene un producto inválido.')
+      }
+
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error('Todas las cantidades deben ser mayores que cero.')
+      }
+
+      normalizedDetails.set(productId, roundMoney((normalizedDetails.get(productId) ?? 0) + quantity))
+    })
+
+    const discountTotal = roundMoney(Number(payload.descuento_total ?? 0))
+
+    if (!Number.isFinite(discountTotal) || discountTotal < 0) {
+      throw new Error('El descuento no puede ser negativo.')
+    }
+
+    const paymentMethod = database.prepare('SELECT id_metodo FROM metodos_pago WHERE id_metodo = ? AND estado = 1').get(payload.id_metodo_pago) as
+      | { id_metodo: number }
       | undefined
 
-    if (!product) {
-      throw new Error('El producto seleccionado no existe.')
+    if (!paymentMethod) {
+      throw new Error('El método de pago seleccionado no existe o está inactivo.')
     }
 
-    const stockActual = getProductStock(database, payload.id_producto)
+    const currency = database.prepare('SELECT id_moneda FROM monedas WHERE id_moneda = ?').get(payload.id_moneda) as
+      | { id_moneda: number }
+      | undefined
 
-    if (stockActual < payload.cantidad) {
-      throw new Error('No hay suficiente stock para completar la venta.')
+    if (!currency) {
+      throw new Error('La moneda seleccionada no existe.')
     }
 
-    const quantity = payload.cantidad
-    const unitPrice = product.precio_venta
-    const subtotal = unitPrice * quantity
-    const discountTotal = payload.descuento_total ?? 0
-    const total = Math.max(subtotal - discountTotal, 0)
+    type SaleLine = {
+      id_producto: number
+      nombre: string
+      cantidad: number
+      precio_costo: number
+      precio_venta: number
+      subtotal_linea: number
+    }
+
+    const lines: SaleLine[] = []
+
+    normalizedDetails.forEach((quantity, productId) => {
+      const product = database
+        .prepare('SELECT id_producto, nombre, precio_costo, precio_venta, estado FROM productos WHERE id_producto = ?')
+        .get(productId) as
+        | { id_producto: number; nombre: string; precio_costo: number; precio_venta: number; estado: number | boolean }
+        | undefined
+
+      if (!product) {
+        throw new Error(`El producto ${productId} no existe.`)
+      }
+
+      if (!product.estado) {
+        throw new Error(`El producto ${product.nombre} está inactivo.`)
+      }
+
+      const stockActual = getProductStock(database, productId)
+
+      if (stockActual < quantity) {
+        throw new Error(`No hay suficiente stock para ${product.nombre}. Disponible: ${stockActual}.`)
+      }
+
+      lines.push({
+        id_producto: product.id_producto,
+        nombre: product.nombre,
+        cantidad: quantity,
+        precio_costo: Number(product.precio_costo),
+        precio_venta: Number(product.precio_venta),
+        subtotal_linea: roundMoney(Number(product.precio_venta) * quantity),
+      })
+    })
+
+    const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.subtotal_linea, 0))
+
+    if (discountTotal > subtotal) {
+      throw new Error('El descuento no puede superar el subtotal de la venta.')
+    }
+
+    const total = roundMoney(subtotal - discountTotal)
     const saleId = getNextId(database, 'ventas', 'id_venta')
-    const detailId = getNextId(database, 'venta_detalles', 'id_venta_detalle')
-    const paymentId = getNextId(database, 'pagos_venta', 'id_pago_venta')
-    const movementId = getNextId(database, 'inventario_movimientos', 'id_movimiento')
     const timestamp = nowSql()
     const invoiceNumber = `FAC-${String(new Date().getFullYear()).slice(-2)}-${String(saleId).padStart(5, '0')}`
 
@@ -671,7 +802,7 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
         saleId,
         invoiceNumber,
         timestamp,
-        SYSTEM_USER_ID,
+        payload.realizado_por ?? SYSTEM_USER_ID,
         subtotal,
         discountTotal,
         total,
@@ -681,16 +812,63 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
         'COMPLETADA',
       )
 
-    database
-      .prepare(
-        `
+    let appliedDiscount = 0
+
+    lines.forEach((line, index) => {
+      const detailId = getNextId(database, 'venta_detalles', 'id_venta_detalle')
+      const movementId = getNextId(database, 'inventario_movimientos', 'id_movimiento')
+      const isLastLine = index === lines.length - 1
+      const lineDiscount =
+        subtotal === 0 ? 0 : isLastLine ? roundMoney(discountTotal - appliedDiscount) : roundMoney((line.subtotal_linea / subtotal) * discountTotal)
+      const lineTotal = roundMoney(line.subtotal_linea - lineDiscount)
+      const unitDiscount = roundMoney(lineDiscount / line.cantidad)
+
+      appliedDiscount = roundMoney(appliedDiscount + lineDiscount)
+
+      database
+        .prepare(
+          `
         INSERT INTO venta_detalles (
           id_venta_detalle, id_venta, id_producto, cantidad, precio_unitario, precio_costo_unitario,
           descuento_unitario, subtotal_linea, total_linea, id_descuento
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
       `,
-      )
-      .run(detailId, saleId, payload.id_producto, quantity, unitPrice, product.precio_costo, discountTotal, subtotal, total)
+        )
+        .run(
+          detailId,
+          saleId,
+          line.id_producto,
+          line.cantidad,
+          line.precio_venta,
+          line.precio_costo,
+          unitDiscount,
+          line.subtotal_linea,
+          lineTotal,
+        )
+
+      database
+        .prepare(
+          `
+        INSERT INTO inventario_movimientos (
+          id_movimiento, id_producto, tipo_movimiento, cantidad, costo_unitario, motivo,
+          referencia, observacion, realizado_por, fecha_movimiento
+        ) VALUES (?, ?, 'VENTA', ?, ?, ?, ?, ?, ?, ?)
+      `,
+        )
+        .run(
+          movementId,
+          line.id_producto,
+          line.cantidad,
+          line.precio_costo,
+          'Venta registrada',
+          invoiceNumber,
+          normalizeText(payload.observacion) ?? `Venta de ${line.nombre}`,
+          payload.realizado_por ?? SYSTEM_USER_ID,
+          timestamp,
+        )
+    })
+
+    const paymentId = getNextId(database, 'pagos_venta', 'id_pago_venta')
 
     database
       .prepare(
@@ -702,33 +880,99 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
       )
       .run(paymentId, saleId, payload.id_metodo_pago, payload.id_moneda, total, invoiceNumber, timestamp)
 
-    database
-      .prepare(
-        `
-        INSERT INTO inventario_movimientos (
-          id_movimiento, id_producto, tipo_movimiento, cantidad, costo_unitario, motivo,
-          referencia, observacion, realizado_por, fecha_movimiento
-        ) VALUES (?, ?, 'VENTA', ?, ?, ?, ?, ?, ?, ?)
-      `,
-      )
-      .run(
-        movementId,
-        payload.id_producto,
-        quantity,
-        product.precio_costo,
-        'Venta registrada',
-        invoiceNumber,
-        normalizeText(payload.observacion) ?? `Venta de ${product.nombre}`,
-        SYSTEM_USER_ID,
-        timestamp,
-      )
-
     return saleId
   })
 
   return {
     saleId: transaction(input),
   }
+}
+
+export function closeInventory(database: Database.Database, input: InventoryAuditInput): InventoryAuditResult {
+  const transaction = database.transaction((payload: InventoryAuditInput) => {
+    const timestamp = nowSql()
+    const details: InventoryAuditResultItem[] = []
+    let adjusted = 0
+
+    for (const item of payload.items) {
+      const product = database
+        .prepare('SELECT id_producto, nombre FROM productos WHERE id_producto = ?')
+        .get(item.id_producto) as { id_producto: number; nombre: string } | undefined
+
+      if (!product) {
+        continue
+      }
+
+      const stockSistema = getProductStock(database, item.id_producto)
+      const conteoFisico = Number(item.conteo_fisico)
+      const diferencia = conteoFisico - stockSistema
+
+      let tipoAjuste: InventoryAuditResultItem['tipo_ajuste'] = 'SIN_CAMBIO'
+
+      if (diferencia > 0) {
+        tipoAjuste = 'AJUSTE_POS'
+      } else if (diferencia < 0) {
+        tipoAjuste = 'AJUSTE_NEG'
+      }
+
+      if (item.precio_costo !== undefined && item.precio_costo !== null) {
+        database
+          .prepare('UPDATE productos SET precio_costo = ?, actualizado_en = ? WHERE id_producto = ?')
+          .run(item.precio_costo, timestamp, item.id_producto)
+      }
+
+      if (item.precio_venta !== undefined && item.precio_venta !== null) {
+        database
+          .prepare('UPDATE productos SET precio_venta = ?, actualizado_en = ? WHERE id_producto = ?')
+          .run(item.precio_venta, timestamp, item.id_producto)
+      }
+
+      if (diferencia !== 0) {
+        const movementId = getNextId(database, 'inventario_movimientos', 'id_movimiento')
+
+        database
+          .prepare(
+            `
+            INSERT INTO inventario_movimientos (
+              id_movimiento, id_producto, tipo_movimiento, cantidad, costo_unitario, motivo,
+              referencia, observacion, realizado_por, fecha_movimiento
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          )
+          .run(
+            movementId,
+            item.id_producto,
+            tipoAjuste,
+            Math.abs(diferencia),
+            item.precio_costo ?? null,
+            'Cierre de inventario físico',
+            `INV-${timestamp.slice(0, 10).replaceAll('-', '')}`,
+            normalizeText(payload.observacion) ?? 'Ajuste automático por cierre de inventario',
+            SYSTEM_USER_ID,
+            timestamp,
+          )
+
+        adjusted += 1
+      }
+
+      details.push({
+        id_producto: item.id_producto,
+        nombre: product.nombre,
+        stock_sistema: stockSistema,
+        conteo_fisico: conteoFisico,
+        diferencia,
+        tipo_ajuste: tipoAjuste,
+      })
+    }
+
+    return {
+      procesados: details.length,
+      ajustados: adjusted,
+      detalles: details,
+    }
+  })
+
+  return transaction(input)
 }
 
 function getProductStock(database: Database.Database, productId: number) {

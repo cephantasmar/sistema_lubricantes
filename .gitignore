@@ -6,3 +6,4 @@ coverage/
 *.log
 *.sqlite
 *.sqlite3
+PROMPT_VENTAS.md
