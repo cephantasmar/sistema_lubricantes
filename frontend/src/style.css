@@ -75,7 +75,7 @@ body {
 
 .topbar-widgets {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -431,4 +431,138 @@ body {
   .mini-stats {
     grid-template-columns: 1fr;
   }
+}
+
+/* =========================================
+   LOGIN OVERLAY (PREMIUM GLASSMORPHISM)
+   ========================================= */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 50%, #0f766e 0%, #064e3b 100%);
+  background-size: cover;
+  z-index: 9999;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 40px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.login-card .brand-block {
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: center;
+}
+
+.login-card .brand-block h2 {
+  font-size: 2rem;
+  margin-top: 10px;
+  color: #1f2937;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.login-card .brand-block__kicker {
+  font-size: 0.85rem;
+  color: #0d9488;
+}
+
+.login-card .field span {
+  font-weight: 600;
+  color: #475569;
+}
+
+.login-card .field input {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+  font-size: 1rem;
+}
+
+.login-card .field input:focus {
+  outline: none;
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+  background: #ffffff;
+}
+
+.login-card .button--primary {
+  padding: 14px 20px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+  box-shadow: 0 4px 14px rgba(15, 118, 110, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: none;
+}
+
+.login-card .button--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(15, 118, 110, 0.5);
+}
+
+/* =========================================
+   RBAC PERMISSIONS LIST (ROLES MODULE)
+   ========================================= */
+.permissions-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.permission-module {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--surface-alt);
+}
+
+.permission-module h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.permission-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-direction: row-reverse;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.permission-item:hover {
+  background-color: var(--border);
+}
+
+.permission-item input {
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: 0;
 }
