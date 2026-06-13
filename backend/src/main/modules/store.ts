@@ -8,6 +8,10 @@ import type {
   ReferenceItem,
   SaleFormInput,
   SaleRow,
+  RoleRow,
+  WorkerRow,
+  AuditLogRow,
+  PermissionRow,
 } from '../../shared/ipc/contracts'
 
 const SYSTEM_USER_ID = 1
@@ -206,6 +210,28 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
   const sales = listSales(database)
   const references = getReferenceData(database)
 
+  const rolesData = database.prepare('SELECT id_rol, nombre, descripcion, estado, creado_en FROM roles ORDER BY id_rol ASC').all() as RoleRow[]
+  const rolPermisos = database.prepare('SELECT id_rol, id_permiso FROM rol_permiso').all() as {id_rol: number, id_permiso: number}[]
+  const roles = rolesData.map(role => ({
+    ...role,
+    permisos: rolPermisos.filter(rp => rp.id_rol === role.id_rol).map(rp => rp.id_permiso)
+  }))
+
+  const workers = database.prepare(`
+    SELECT t.id_trabajador, t.id_usuario, t.cedula, t.nombres, t.apellidos, t.cargo, t.salario_base, t.estado, t.creado_en, ur.id_rol 
+    FROM trabajadores t
+    LEFT JOIN usuario_rol ur ON ur.id_usuario = t.id_usuario
+    ORDER BY t.nombres ASC
+  `).all() as WorkerRow[]
+  const auditLogs = database.prepare(`
+    SELECT l.id_log, COALESCE(u.username, 'Sistema') AS usuario, l.accion, l.modulo, l.descripcion, l.fecha_evento 
+    FROM auditoria_logs l 
+    LEFT JOIN usuarios u ON u.id_usuario = l.id_usuario 
+    ORDER BY l.fecha_evento DESC LIMIT 50
+  `).all() as AuditLogRow[]
+  
+  const permissions = database.prepare('SELECT id_permiso, nombre, descripcion, modulo, creado_en FROM permisos ORDER BY modulo ASC, nombre ASC').all() as PermissionRow[]
+
   const totalStock = products.reduce((sum, product) => sum + toNumber(product.stock_actual), 0)
   const lowStockProducts = products.filter((product) => toNumber(product.stock_actual) <= toNumber(product.stock_minimo)).length
 
@@ -221,6 +247,10 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
     products,
     movements,
     sales,
+    roles,
+    workers,
+    auditLogs,
+    permissions
   }
 }
 
