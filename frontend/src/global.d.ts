@@ -6,6 +6,7 @@ import type {
   MovementFormInput,
   ProductFormInput,
   SaleFormInput,
+  SaleFullDetail,
 } from '@shared/ipc/contracts'
 
 declare global {
@@ -16,6 +17,7 @@ declare global {
       saveProduct: (payload: ProductFormInput) => Promise<{ productId: number }>
       createMovement: (payload: MovementFormInput) => Promise<{ movementId: number }>
       createSale: (payload: SaleFormInput) => Promise<{ saleId: number }>
+      getSaleDetail: (saleId: number) => Promise<SaleFullDetail>
     }
   }
 }

@@ -86,18 +86,72 @@ export type MovementFormInput = {
   realizado_por?: number | null
 }
 
+export type PaymentInput = {
+  id_metodo_pago: number
+  id_moneda: number
+  monto: number
+  referencia_pago: string | null
+}
+
 export type SaleDetailInput = {
   id_producto: number
   cantidad: number
+  descuento_unitario: number
+  id_descuento: number | null
 }
 
 export type SaleFormInput = {
-  detalles: SaleDetailInput[]
-  descuento_total?: number | null
-  id_metodo_pago: number
+  id_cliente: number | null
+  id_vendedor: number
+  id_turno: number | null
   id_moneda: number
-  observacion?: string | null
-  realizado_por?: number | null
+  tasa_cambio_aplicada: number
+  observacion: string | null
+  detalles: SaleDetailInput[]
+  pagos: PaymentInput[]
+}
+
+export type SaleDetailRow = {
+  id_producto: number
+  codigo: string
+  nombre: string
+  cantidad: number
+  precio_unitario: number
+  precio_costo_unitario: number
+  descuento_unitario: number
+  subtotal_linea: number
+  total_linea: number
+}
+
+export type SalePaymentRow = {
+  metodo_pago: string
+  moneda_codigo: string
+  monto: number
+  referencia_pago: string | null
+}
+
+export type SaleFullDetail = {
+  id_venta: number
+  numero_factura: string
+  fecha_venta: string
+  cliente_nombre: string | null
+  vendedor_nombre: string
+  turno_nombre: string | null
+  subtotal: number
+  descuento_total: number
+  total: number
+  moneda_codigo: string
+  tasa_cambio: number
+  observacion: string | null
+  estado: string
+  ganancia_total: number
+  detalles: SaleDetailRow[]
+  pagos: SalePaymentRow[]
+}
+
+export type ExchangeRateItem = {
+  id_moneda: number
+  valor: number
 }
 
 export type BootstrapData = {
@@ -106,6 +160,10 @@ export type BootstrapData = {
     categorias: ReferenceItem[]
     monedas: ReferenceItem[]
     metodosPago: ReferenceItem[]
+    clientes: ReferenceItem[]
+    trabajadores: ReferenceItem[]
+    turnos: ReferenceItem[]
+    tiposCambio: ExchangeRateItem[]
   }
   metrics: {
     totalProducts: number

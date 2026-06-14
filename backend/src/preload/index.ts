@@ -5,6 +5,7 @@ import type {
   MovementFormInput,
   ProductFormInput,
   SaleFormInput,
+  SaleFullDetail,
 } from '../shared/ipc/contracts'
 
 contextBridge.exposeInMainWorld('inventoryApi', {
@@ -14,4 +15,5 @@ contextBridge.exposeInMainWorld('inventoryApi', {
   createMovement: (payload: MovementFormInput) =>
     ipcRenderer.invoke('inventory:create-movement', payload) as Promise<{ movementId: number }>,
   createSale: (payload: SaleFormInput) => ipcRenderer.invoke('sales:create-sale', payload) as Promise<{ saleId: number }>,
+  getSaleDetail: (saleId: number) => ipcRenderer.invoke('sales:get-sale-detail', saleId) as Promise<SaleFullDetail>,
 })

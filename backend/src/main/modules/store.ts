@@ -8,6 +8,9 @@ import type {
   ReferenceItem,
   SaleFormInput,
   SaleRow,
+  SaleFullDetail,
+  SaleDetailRow,
+  SalePaymentRow,
 } from '../../shared/ipc/contracts'
 
 const SYSTEM_USER_ID = 1
@@ -120,11 +123,44 @@ export function getReferenceData(database: Database.Database) {
     descripcion: string | null
   }>
 
+  const clientes = database.prepare("SELECT id_cliente AS id, nombre, COALESCE('Doc: ' || documento, '') AS descripcion FROM clientes ORDER BY nombre ASC").all() as Array<{
+    id: number
+    nombre: string
+    descripcion: string | null
+  }>
+
+  const trabajadores = database.prepare("SELECT id_trabajador AS id, nombres || ' ' || apellidos AS nombre, cargo AS descripcion FROM trabajadores WHERE estado = 'ACTIVO' ORDER BY nombres ASC").all() as Array<{
+    id: number
+    nombre: string
+    descripcion: string | null
+  }>
+
+  const turnos = database.prepare("SELECT id_turno AS id, nombre || ' (' || hora_inicio || ' - ' || hora_fin || ')' AS nombre, descripcion FROM turnos WHERE estado = 1 ORDER BY nombre ASC").all() as Array<{
+    id: number
+    nombre: string
+    descripcion: string | null
+  }>
+
+  const tiposCambio = database.prepare(`
+    SELECT id_moneda, valor
+    FROM tipo_cambio tc
+    WHERE registrado_en = (
+      SELECT MAX(registrado_en) FROM tipo_cambio WHERE id_moneda = tc.id_moneda
+    )
+  `).all() as Array<{
+    id_moneda: number
+    valor: number
+  }>
+
   return {
     marcas: marcas.map(mapReferenceItem),
     categorias: categorias.map(mapReferenceItem),
     monedas: monedas.map(mapReferenceItem),
     metodosPago: metodosPago.map(mapReferenceItem),
+    clientes: clientes.map(mapReferenceItem),
+    trabajadores: trabajadores.map(mapReferenceItem),
+    turnos: turnos.map(mapReferenceItem),
+    tiposCambio,
   }
 }
 
@@ -187,7 +223,7 @@ export function listSales(database: Database.Database): SaleRow[] {
       LEFT JOIN (
         SELECT
           pv.id_venta,
-          MIN(mp.nombre) AS metodo_pago
+          GROUP_CONCAT(mp.nombre, ', ') AS metodo_pago
         FROM pagos_venta pv
         INNER JOIN metodos_pago mp ON mp.id_metodo = pv.id_metodo_pago
         GROUP BY pv.id_venta
@@ -375,25 +411,60 @@ export function createMovement(database: Database.Database, input: MovementFormI
   }
 }
 
+function getCurrencyRate(database: Database.Database, idMoneda: number): number {
+  if (idMoneda === 1) return 1
+  const currency = database.prepare('SELECT codigo FROM monedas WHERE id_moneda = ?').get(idMoneda) as { codigo: string } | undefined
+  if (!currency || currency.codigo === 'BOB') return 1
+
+  const rate = database.prepare(`
+    SELECT valor FROM tipo_cambio
+    WHERE id_moneda = ?
+    ORDER BY registrado_en DESC
+    LIMIT 1
+  `).get(idMoneda) as { valor: number } | undefined
+
+  return rate ? Number(rate.valor) : 1
+}
+
 export function createSale(database: Database.Database, input: SaleFormInput) {
   const transaction = database.transaction((payload: SaleFormInput) => {
     if (!payload.detalles.length) {
       throw new Error('La venta debe tener al menos un producto.')
     }
 
-    if (payload.id_metodo_pago <= 0) {
-      throw new Error('Debe seleccionar un método de pago.')
+    if (!payload.pagos || payload.pagos.length === 0) {
+      throw new Error('Debe registrar al menos un pago.')
     }
 
-    if (payload.id_moneda <= 0) {
-      throw new Error('Debe seleccionar una moneda.')
+    const vendedor = database.prepare('SELECT id_trabajador FROM trabajadores WHERE id_trabajador = ?').get(payload.id_vendedor)
+    if (!vendedor) {
+      throw new Error('El vendedor especificado no existe.')
     }
 
-    const normalizedDetails = new Map<number, number>()
+    if (payload.id_cliente !== null) {
+      const cliente = database.prepare('SELECT id_cliente FROM clientes WHERE id_cliente = ?').get(payload.id_cliente)
+      if (!cliente) {
+        throw new Error('El cliente especificado no existe.')
+      }
+    }
 
+    if (payload.id_turno !== null) {
+      const turno = database.prepare('SELECT id_turno FROM turnos WHERE id_turno = ?').get(payload.id_turno)
+      if (!turno) {
+        throw new Error('El turno especificado no existe.')
+      }
+    }
+
+    const currency = database.prepare('SELECT id_moneda FROM monedas WHERE id_moneda = ?').get(payload.id_moneda) as { id_moneda: number } | undefined
+    if (!currency) {
+      throw new Error('La moneda seleccionada no existe.')
+    }
+
+    const normalizedDetails = new Map<number, { cantidad: number; descuento_unitario: number; id_descuento: number | null }>()
     payload.detalles.forEach((detail) => {
       const productId = Number(detail.id_producto)
       const quantity = Number(detail.cantidad)
+      const descUnit = Number(detail.descuento_unitario ?? 0)
 
       if (!Number.isFinite(productId) || productId <= 0) {
         throw new Error('La venta contiene un producto inválido.')
@@ -403,30 +474,18 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
         throw new Error('Todas las cantidades deben ser mayores que cero.')
       }
 
-      normalizedDetails.set(productId, roundMoney((normalizedDetails.get(productId) ?? 0) + quantity))
+      if (!Number.isFinite(descUnit) || descUnit < 0) {
+        throw new Error('El descuento unitario no puede ser negativo.')
+      }
+
+      const current = normalizedDetails.get(productId)
+      const newQty = roundMoney((current?.cantidad ?? 0) + quantity)
+      normalizedDetails.set(productId, {
+        cantidad: newQty,
+        descuento_unitario: descUnit,
+        id_descuento: detail.id_descuento ?? null
+      })
     })
-
-    const discountTotal = roundMoney(Number(payload.descuento_total ?? 0))
-
-    if (!Number.isFinite(discountTotal) || discountTotal < 0) {
-      throw new Error('El descuento no puede ser negativo.')
-    }
-
-    const paymentMethod = database.prepare('SELECT id_metodo FROM metodos_pago WHERE id_metodo = ? AND estado = 1').get(payload.id_metodo_pago) as
-      | { id_metodo: number }
-      | undefined
-
-    if (!paymentMethod) {
-      throw new Error('El método de pago seleccionado no existe o está inactivo.')
-    }
-
-    const currency = database.prepare('SELECT id_moneda FROM monedas WHERE id_moneda = ?').get(payload.id_moneda) as
-      | { id_moneda: number }
-      | undefined
-
-    if (!currency) {
-      throw new Error('La moneda seleccionada no existe.')
-    }
 
     type SaleLine = {
       id_producto: number
@@ -434,12 +493,14 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
       cantidad: number
       precio_costo: number
       precio_venta: number
+      descuento_unitario: number
       subtotal_linea: number
+      total_linea: number
+      id_descuento: number | null
     }
 
     const lines: SaleLine[] = []
-
-    normalizedDetails.forEach((quantity, productId) => {
+    normalizedDetails.forEach((info, productId) => {
       const product = database
         .prepare('SELECT id_producto, nombre, precio_costo, precio_venta, estado FROM productos WHERE id_producto = ?')
         .get(productId) as
@@ -447,7 +508,7 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
         | undefined
 
       if (!product) {
-        throw new Error(`El producto ${productId} no existe.`)
+        throw new Error(`El producto con ID ${productId} no existe.`)
       }
 
       if (!product.estado) {
@@ -455,28 +516,74 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
       }
 
       const stockActual = getProductStock(database, productId)
-
-      if (stockActual < quantity) {
+      if (stockActual < info.cantidad) {
         throw new Error(`No hay suficiente stock para ${product.nombre}. Disponible: ${stockActual}.`)
       }
+
+      const subtotalLine = roundMoney(Number(product.precio_venta) * info.cantidad)
+      const discountLine = roundMoney(info.descuento_unitario * info.cantidad)
+      if (discountLine > subtotalLine) {
+        throw new Error(`El descuento del producto ${product.nombre} no puede ser mayor que su subtotal.`)
+      }
+      const totalLine = roundMoney(subtotalLine - discountLine)
 
       lines.push({
         id_producto: product.id_producto,
         nombre: product.nombre,
-        cantidad: quantity,
+        cantidad: info.cantidad,
         precio_costo: Number(product.precio_costo),
         precio_venta: Number(product.precio_venta),
-        subtotal_linea: roundMoney(Number(product.precio_venta) * quantity),
+        descuento_unitario: info.descuento_unitario,
+        subtotal_linea: subtotalLine,
+        total_linea: totalLine,
+        id_descuento: info.id_descuento
       })
     })
 
     const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.subtotal_linea, 0))
+    const discountTotal = roundMoney(lines.reduce((sum, line) => sum + (line.descuento_unitario * line.cantidad), 0))
+    const total = roundMoney(subtotal - discountTotal)
 
-    if (discountTotal > subtotal) {
-      throw new Error('El descuento no puede superar el subtotal de la venta.')
+    let totalPagadoInSaleCurrency = 0
+    const paymentsWithSaleValue = payload.pagos.map((pago) => {
+      const rateP = getCurrencyRate(database, pago.id_moneda)
+      const rateS = payload.tasa_cambio_aplicada || getCurrencyRate(database, payload.id_moneda)
+      const montoInSaleCurrency = roundMoney((pago.monto * rateP) / rateS)
+      totalPagadoInSaleCurrency = roundMoney(totalPagadoInSaleCurrency + montoInSaleCurrency)
+      return {
+        ...pago,
+        montoInSaleCurrency,
+        rateP
+      }
+    })
+
+    let estado = 'COMPLETADA'
+    let vueltoInSaleCurrency = 0
+    if (totalPagadoInSaleCurrency < total) {
+      estado = 'PENDIENTE'
+    } else if (totalPagadoInSaleCurrency > total) {
+      vueltoInSaleCurrency = roundMoney(totalPagadoInSaleCurrency - total)
+      
+      const cashMethod = database.prepare("SELECT id_metodo FROM metodos_pago WHERE LOWER(nombre) LIKE '%efectivo%'").get() as { id_metodo: number } | undefined
+      const cashPaymentIdx = paymentsWithSaleValue.findIndex(p => cashMethod && p.id_metodo_pago === cashMethod.id_metodo)
+
+      if (cashPaymentIdx !== -1) {
+        const cashPay = paymentsWithSaleValue[cashPaymentIdx]
+        const rateS = payload.tasa_cambio_aplicada || getCurrencyRate(database, payload.id_moneda)
+        const vueltoInCashCurrency = roundMoney((vueltoInSaleCurrency * rateS) / cashPay.rateP)
+        
+        cashPay.monto = roundMoney(cashPay.monto - vueltoInCashCurrency)
+        cashPay.montoInSaleCurrency = roundMoney(cashPay.montoInSaleCurrency - vueltoInSaleCurrency)
+      } else {
+        const firstPay = paymentsWithSaleValue[0]
+        const rateS = payload.tasa_cambio_aplicada || getCurrencyRate(database, payload.id_moneda)
+        const vueltoInPayCurrency = roundMoney((vueltoInSaleCurrency * rateS) / firstPay.rateP)
+        
+        firstPay.monto = roundMoney(firstPay.monto - vueltoInPayCurrency)
+        firstPay.montoInSaleCurrency = roundMoney(firstPay.montoInSaleCurrency - vueltoInSaleCurrency)
+      }
     }
 
-    const total = roundMoney(subtotal - discountTotal)
     const saleId = getNextId(database, 'ventas', 'id_venta')
     const timestamp = nowSql()
     const invoiceNumber = `FAC-${String(new Date().getFullYear()).slice(-2)}-${String(saleId).padStart(5, '0')}`
@@ -487,44 +594,37 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
         INSERT INTO ventas (
           id_venta, numero_factura, fecha_venta, id_cliente, id_vendedor, id_turno,
           subtotal, descuento_total, total, id_moneda, tasa_cambio_aplicada, observacion, estado
-        ) VALUES (?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       )
       .run(
         saleId,
         invoiceNumber,
         timestamp,
-        payload.realizado_por ?? SYSTEM_USER_ID,
+        payload.id_cliente,
+        payload.id_vendedor,
+        payload.id_turno,
         subtotal,
         discountTotal,
         total,
         payload.id_moneda,
-        1,
+        payload.tasa_cambio_aplicada,
         normalizeText(payload.observacion),
-        'COMPLETADA',
+        estado
       )
 
-    let appliedDiscount = 0
-
-    lines.forEach((line, index) => {
+    lines.forEach((line) => {
       const detailId = getNextId(database, 'venta_detalles', 'id_venta_detalle')
       const movementId = getNextId(database, 'inventario_movimientos', 'id_movimiento')
-      const isLastLine = index === lines.length - 1
-      const lineDiscount =
-        subtotal === 0 ? 0 : isLastLine ? roundMoney(discountTotal - appliedDiscount) : roundMoney((line.subtotal_linea / subtotal) * discountTotal)
-      const lineTotal = roundMoney(line.subtotal_linea - lineDiscount)
-      const unitDiscount = roundMoney(lineDiscount / line.cantidad)
-
-      appliedDiscount = roundMoney(appliedDiscount + lineDiscount)
 
       database
         .prepare(
           `
-        INSERT INTO venta_detalles (
-          id_venta_detalle, id_venta, id_producto, cantidad, precio_unitario, precio_costo_unitario,
-          descuento_unitario, subtotal_linea, total_linea, id_descuento
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
-      `,
+          INSERT INTO venta_detalles (
+            id_venta_detalle, id_venta, id_producto, cantidad, precio_unitario, precio_costo_unitario,
+            descuento_unitario, subtotal_linea, total_linea, id_descuento
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
         )
         .run(
           detailId,
@@ -533,19 +633,20 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
           line.cantidad,
           line.precio_venta,
           line.precio_costo,
-          unitDiscount,
+          line.descuento_unitario,
           line.subtotal_linea,
-          lineTotal,
+          line.total_linea,
+          line.id_descuento
         )
 
       database
         .prepare(
           `
-        INSERT INTO inventario_movimientos (
-          id_movimiento, id_producto, tipo_movimiento, cantidad, costo_unitario, motivo,
-          referencia, observacion, realizado_por, fecha_movimiento
-        ) VALUES (?, ?, 'VENTA', ?, ?, ?, ?, ?, ?, ?)
-      `,
+          INSERT INTO inventario_movimientos (
+            id_movimiento, id_producto, tipo_movimiento, cantidad, costo_unitario, motivo,
+            referencia, observacion, realizado_por, fecha_movimiento
+          ) VALUES (?, ?, 'VENTA', ?, ?, ?, ?, ?, ?, ?)
+        `,
         )
         .run(
           movementId,
@@ -555,28 +656,146 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
           'Venta registrada',
           invoiceNumber,
           normalizeText(payload.observacion) ?? `Venta de ${line.nombre}`,
-          payload.realizado_por ?? SYSTEM_USER_ID,
-          timestamp,
+          payload.id_vendedor,
+          timestamp
         )
     })
 
-    const paymentId = getNextId(database, 'pagos_venta', 'id_pago_venta')
-
-    database
-      .prepare(
-        `
-        INSERT INTO pagos_venta (
-          id_pago_venta, id_venta, id_metodo_pago, id_moneda, monto, referencia_pago, fecha_pago
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      )
-      .run(paymentId, saleId, payload.id_metodo_pago, payload.id_moneda, total, invoiceNumber, timestamp)
+    paymentsWithSaleValue.forEach((pago) => {
+      if (pago.monto > 0) {
+        const paymentId = getNextId(database, 'pagos_venta', 'id_pago_venta')
+        database
+          .prepare(
+            `
+            INSERT INTO pagos_venta (
+              id_pago_venta, id_venta, id_metodo_pago, id_moneda, monto, referencia_pago, fecha_pago
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          `,
+          )
+          .run(
+            paymentId,
+            saleId,
+            pago.id_metodo_pago,
+            pago.id_moneda,
+            pago.monto,
+            normalizeText(pago.referencia_pago),
+            timestamp
+          )
+      }
+    })
 
     return saleId
   })
 
   return {
     saleId: transaction(input),
+  }
+}
+
+export function getSaleDetail(database: Database.Database, saleId: number): SaleFullDetail {
+  const sale = database
+    .prepare(
+      `
+      SELECT
+        v.id_venta,
+        v.numero_factura,
+        v.fecha_venta,
+        v.subtotal,
+        v.descuento_total,
+        v.total,
+        v.tasa_cambio_aplicada AS tasa_cambio,
+        v.observacion,
+        v.estado,
+        mo.codigo AS moneda_codigo,
+        c.nombre AS cliente_nombre,
+        t.nombres || ' ' || t.apellidos AS vendedor_nombre,
+        tu.nombre AS turno_nombre
+      FROM ventas v
+      INNER JOIN monedas mo ON mo.id_moneda = v.id_moneda
+      LEFT JOIN clientes c ON c.id_cliente = v.id_cliente
+      INNER JOIN trabajadores t ON t.id_trabajador = v.id_vendedor
+      LEFT JOIN turnos tu ON tu.id_turno = v.id_turno
+      WHERE v.id_venta = ?
+    `
+    )
+    .get(saleId) as any
+
+  if (!sale) {
+    throw new Error('La venta solicitada no existe.')
+  }
+
+  const detalles = database
+    .prepare(
+      `
+      SELECT
+        vd.id_producto,
+        p.codigo,
+        p.nombre,
+        vd.cantidad,
+        vd.precio_unitario,
+        vd.precio_costo_unitario,
+        vd.descuento_unitario,
+        vd.subtotal_linea,
+        vd.total_linea
+      FROM venta_detalles vd
+      INNER JOIN productos p ON p.id_producto = vd.id_producto
+      WHERE vd.id_venta = ?
+    `
+    )
+    .all(saleId) as SaleDetailRow[]
+
+  const pagos = database
+    .prepare(
+      `
+      SELECT
+        mp.nombre AS metodo_pago,
+        mo.codigo AS moneda_codigo,
+        pv.monto,
+        pv.referencia_pago
+      FROM pagos_venta pv
+      INNER JOIN metodos_pago mp ON mp.id_metodo = pv.id_metodo_pago
+      INNER JOIN monedas mo ON mo.id_moneda = pv.id_moneda
+      WHERE pv.id_venta = ?
+    `
+    )
+    .all(saleId) as SalePaymentRow[]
+
+  const ganancia_total = roundMoney(
+    detalles.reduce((sum, item) => sum + (Number(item.total_linea) - (Number(item.precio_costo_unitario) * Number(item.cantidad))), 0)
+  )
+
+  return {
+    id_venta: Number(sale.id_venta),
+    numero_factura: sale.numero_factura,
+    fecha_venta: sale.fecha_venta,
+    cliente_nombre: sale.cliente_nombre,
+    vendedor_nombre: sale.vendedor_nombre,
+    turno_nombre: sale.turno_nombre,
+    subtotal: Number(sale.subtotal),
+    descuento_total: Number(sale.descuento_total),
+    total: Number(sale.total),
+    moneda_codigo: sale.moneda_codigo,
+    tasa_cambio: Number(sale.tasa_cambio),
+    observacion: sale.observacion,
+    estado: sale.estado,
+    ganancia_total,
+    detalles: detalles.map((d) => ({
+      id_producto: Number(d.id_producto),
+      codigo: d.codigo,
+      nombre: d.nombre,
+      cantidad: Number(d.cantidad),
+      precio_unitario: Number(d.precio_unitario),
+      precio_costo_unitario: Number(d.precio_costo_unitario),
+      descuento_unitario: Number(d.descuento_unitario),
+      subtotal_linea: Number(d.subtotal_linea),
+      total_linea: Number(d.total_linea),
+    })),
+    pagos: pagos.map((p) => ({
+      metodo_pago: p.metodo_pago,
+      moneda_codigo: p.moneda_codigo,
+      monto: Number(p.monto),
+      referencia_pago: p.referencia_pago,
+    })),
   }
 }
 
