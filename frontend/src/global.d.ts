@@ -12,8 +12,7 @@ import type {
   AuthInput,
   AuthResult,
   RoleFormInput,
-  WorkerFormInput,
-  AttendanceInput
+  WorkerFormInput
 } from '@shared/ipc/contracts'
 
 declare global {
@@ -30,7 +29,6 @@ declare global {
       login: (payload: AuthInput) => Promise<AuthResult>
       saveRole: (payload: RoleFormInput) => Promise<{ roleId: number }>
       saveWorker: (payload: WorkerFormInput) => Promise<{ workerId: number }>
-      recordAttendance: (payload: AttendanceInput) => Promise<{ attendanceId: number }>
     }
   }
 }

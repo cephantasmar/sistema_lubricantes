@@ -13,6 +13,8 @@ import type {
   ReferenceItem,
   SaleFormInput,
   SaleRow,
+  ShiftHistoryRow,
+  ShiftRotationSummaryRow,
   ShiftRow,
   WorkerRow,
   WorkHoursSummaryRow,
@@ -20,6 +22,7 @@ import type {
   AuditLogRow,
   PermissionRow,
 } from '../../shared/ipc/contracts'
+import { getCurrentUserAccess, getCurrentWorkerId, hasPermission, requirePermission } from './auth'
 
 const SYSTEM_USER_ID = 1
 
@@ -142,6 +145,15 @@ function getNextId(database: Database.Database, tableName: string, columnName: s
   return Number(result.next_id)
 }
 
+function assertAttendanceWorkerScope(database: Database.Database, workerId: number) {
+  const access = getCurrentUserAccess(database)
+  const currentWorkerId = getCurrentWorkerId()
+
+  if (!access.canViewAllAttendance && workerId !== currentWorkerId) {
+    throw new Error('Solo puedes registrar asistencias de tu propio usuario.')
+  }
+}
+
 function movementDirection(typeMovimiento: string) {
   switch (typeMovimiento.toUpperCase()) {
     case 'ENTRADA':
@@ -165,7 +177,7 @@ function mapReferenceItem(row: { id: number; nombre: string; descripcion: string
   }
 }
 
-export function getReferenceData(database: Database.Database) {
+export function getReferenceData(database: Database.Database, workerScopeId?: number | null) {
   const marcas = database.prepare('SELECT id_marca AS id, nombre, descripcion FROM marcas ORDER BY nombre ASC').all() as Array<{
     id: number
     nombre: string
@@ -192,20 +204,27 @@ export function getReferenceData(database: Database.Database) {
     descripcion: string | null
   }>
 
+  const workerFilter = typeof workerScopeId === 'number' ? 'AND id_trabajador = ?' : ''
+  const workerParams = typeof workerScopeId === 'number' ? [workerScopeId] : []
   const trabajadores = database
     .prepare(
       `
       SELECT
         id_trabajador,
-        nombres || ' ' || apellidos AS nombre_completo,
+        id_usuario,
+        cedula,
+        nombres,
+        apellidos,
         cargo,
+        salario_base,
+        creado_en,
         estado
       FROM trabajadores
-      WHERE estado = 'activo'
+      WHERE estado = 'activo' ${workerFilter}
       ORDER BY nombres ASC, apellidos ASC
     `,
     )
-    .all() as WorkerRow[]
+    .all(...workerParams) as WorkerRow[]
 
   const turnos = database
     .prepare(
@@ -300,7 +319,17 @@ export function listSales(database: Database.Database): SaleRow[] {
     .all() as SaleRow[]
 }
 
-export function listAttendances(database: Database.Database): AttendanceRow[] {
+export function listAttendances(database: Database.Database, workerScopeId?: number | null): AttendanceRow[] {
+  const conditions = ['(a.fecha = ? OR a.hora_salida IS NULL)']
+  const params: Array<number | string> = [todaySql()]
+
+  if (typeof workerScopeId === 'number') {
+    conditions.push('a.id_trabajador = ?')
+    params.push(workerScopeId)
+  }
+
+  const attendanceFilter = `WHERE ${conditions.join(' AND ')}`
+
   return database
     .prepare(
       `
@@ -318,16 +347,20 @@ export function listAttendances(database: Database.Database): AttendanceRow[] {
       FROM asistencias a
       INNER JOIN trabajadores t ON t.id_trabajador = a.id_trabajador
       INNER JOIN turnos tu ON tu.id_turno = a.id_turno
+      ${attendanceFilter}
       ORDER BY substr(a.fecha, 7, 4) || '-' || substr(a.fecha, 4, 2) || '-' || substr(a.fecha, 1, 2) DESC,
         COALESCE(a.hora_salida, a.hora_entrada) DESC,
         a.id_asistencia DESC
-      LIMIT 80
+      LIMIT 40
     `,
     )
-    .all() as AttendanceRow[]
+    .all(...params) as AttendanceRow[]
 }
 
-export function listWorkHoursSummary(database: Database.Database): WorkHoursSummaryRow[] {
+export function listWorkHoursSummary(database: Database.Database, workerScopeId?: number | null): WorkHoursSummaryRow[] {
+  const workerFilter = typeof workerScopeId === 'number' ? 'AND t.id_trabajador = ?' : ''
+  const params = typeof workerScopeId === 'number' ? [workerScopeId] : []
+
   return database
     .prepare(
       `
@@ -352,43 +385,136 @@ export function listWorkHoursSummary(database: Database.Database): WorkHoursSumm
         ), 0), 2) AS horas_trabajadas
       FROM trabajadores t
       LEFT JOIN asistencias a ON a.id_trabajador = t.id_trabajador AND a.hora_salida IS NOT NULL
-      WHERE t.estado = 'activo'
+      WHERE t.estado = 'activo' ${workerFilter}
       GROUP BY t.id_trabajador
       ORDER BY horas_trabajadas DESC, trabajador_nombre ASC
     `,
     )
-    .all() as WorkHoursSummaryRow[]
+    .all(...params) as WorkHoursSummaryRow[]
+}
+
+export function listShiftHistory(database: Database.Database, workerScopeId?: number | null): ShiftHistoryRow[] {
+  const workerFilter = typeof workerScopeId === 'number' ? 'WHERE a.id_trabajador = ?' : ''
+  const params = typeof workerScopeId === 'number' ? [workerScopeId] : []
+
+  return database
+    .prepare(
+      `
+      SELECT
+        a.id_asistencia,
+        a.id_trabajador,
+        t.nombres || ' ' || t.apellidos AS trabajador_nombre,
+        t.cargo,
+        tu.nombre AS turno_nombre,
+        a.fecha,
+        a.hora_entrada,
+        a.hora_salida,
+        CASE WHEN a.hora_salida IS NULL THEN 'EN_TURNO' ELSE 'COMPLETADO' END AS estado
+      FROM asistencias a
+      INNER JOIN trabajadores t ON t.id_trabajador = a.id_trabajador
+      INNER JOIN turnos tu ON tu.id_turno = a.id_turno
+      ${workerFilter}
+      ORDER BY substr(a.fecha, 7, 4) || '-' || substr(a.fecha, 4, 2) || '-' || substr(a.fecha, 1, 2) DESC,
+        COALESCE(a.hora_salida, a.hora_entrada) DESC,
+        a.id_asistencia DESC
+      LIMIT 120
+    `,
+    )
+    .all(...params) as ShiftHistoryRow[]
+}
+
+export function listShiftRotationSummary(database: Database.Database, workerScopeId?: number | null): ShiftRotationSummaryRow[] {
+  const workerFilter = typeof workerScopeId === 'number' ? 'AND t.id_trabajador = ?' : ''
+  const params = typeof workerScopeId === 'number' ? [workerScopeId] : []
+
+  return database
+    .prepare(
+      `
+      WITH attendance_order AS (
+        SELECT
+          a.id_trabajador,
+          tu.nombre AS turno_nombre,
+          a.fecha,
+          ROW_NUMBER() OVER (
+            PARTITION BY a.id_trabajador
+            ORDER BY substr(a.fecha, 7, 4) || '-' || substr(a.fecha, 4, 2) || '-' || substr(a.fecha, 1, 2) DESC,
+              COALESCE(a.hora_salida, a.hora_entrada) DESC,
+              a.id_asistencia DESC
+          ) AS row_number
+        FROM asistencias a
+        INNER JOIN turnos tu ON tu.id_turno = a.id_turno
+      )
+      SELECT
+        t.id_trabajador,
+        t.nombres || ' ' || t.apellidos AS trabajador_nombre,
+        t.cargo,
+        COALESCE(SUM(CASE WHEN lower(tu.nombre) LIKE '%ma%' OR tu.hora_inicio < '12:00' THEN 1 ELSE 0 END), 0) AS turnos_manana,
+        COALESCE(SUM(CASE WHEN lower(tu.nombre) LIKE '%tarde%' THEN 1 ELSE 0 END), 0) AS turnos_tarde,
+        COALESCE(SUM(CASE WHEN lower(tu.nombre) LIKE '%noche%' THEN 1 ELSE 0 END), 0) AS turnos_noche,
+        COUNT(a.id_asistencia) AS total_turnos,
+        latest.turno_nombre AS ultimo_turno,
+        latest.fecha AS ultima_fecha
+      FROM trabajadores t
+      LEFT JOIN asistencias a ON a.id_trabajador = t.id_trabajador
+      LEFT JOIN turnos tu ON tu.id_turno = a.id_turno
+      LEFT JOIN attendance_order latest ON latest.id_trabajador = t.id_trabajador AND latest.row_number = 1
+      WHERE t.estado = 'activo' ${workerFilter}
+      GROUP BY t.id_trabajador
+      ORDER BY total_turnos DESC, trabajador_nombre ASC
+    `,
+    )
+    .all(...params) as ShiftRotationSummaryRow[]
 }
 
 export function getBootstrapData(database: Database.Database): BootstrapData {
-  const products = listProducts(database)
-  const movements = listMovements(database)
-  const sales = listSales(database)
-  const attendances = listAttendances(database)
-  const workHoursSummary = listWorkHoursSummary(database)
-  const references = getReferenceData(database)
+  const access = getCurrentUserAccess(database)
+  const canManageRoles = hasPermission(database, 'GESTIONAR_ROLES')
+  const canManageWorkers = hasPermission(database, 'GESTIONAR_TRABAJADORES')
+  const canAccessInventoryData =
+    hasPermission(database, 'VER_INVENTARIO') ||
+    hasPermission(database, 'REGISTRAR_MOVIMIENTOS') ||
+    hasPermission(database, 'REGISTRAR_VENTAS') ||
+    hasPermission(database, 'GESTIONAR_INVENTARIO')
+  const canAccessAttendanceData = hasPermission(database, 'VER_ASISTENCIAS') || hasPermission(database, 'REGISTRAR_ASISTENCIAS')
+  const attendanceWorkerScope = access.canViewAllAttendance ? null : getCurrentWorkerId() ?? -1
 
-  const rolesData = database.prepare('SELECT id_rol, nombre, descripcion, estado, creado_en FROM roles ORDER BY id_rol ASC').all() as RoleRow[]
+  const products = canAccessInventoryData ? listProducts(database) : []
+  const movements = hasPermission(database, 'VER_MOVIMIENTOS') ? listMovements(database) : []
+  const sales = hasPermission(database, 'VER_VENTAS') ? listSales(database) : []
+  const attendances = canAccessAttendanceData ? listAttendances(database, attendanceWorkerScope) : []
+  const workHoursSummary = canAccessAttendanceData && access.canViewAllAttendance ? listWorkHoursSummary(database) : []
+  const shiftHistory = canAccessAttendanceData ? listShiftHistory(database, attendanceWorkerScope) : []
+  const shiftRotationSummary = canAccessAttendanceData && access.canViewAllAttendance ? listShiftRotationSummary(database) : []
+  const references = getReferenceData(database, access.canViewAllAttendance ? null : attendanceWorkerScope)
+
+  const rolesData = canManageRoles
+    ? (database.prepare('SELECT id_rol, nombre, descripcion, estado, creado_en FROM roles ORDER BY id_rol ASC').all() as RoleRow[])
+    : []
   const rolPermisos = database.prepare('SELECT id_rol, id_permiso FROM rol_permiso').all() as {id_rol: number, id_permiso: number}[]
   const roles = rolesData.map(role => ({
     ...role,
     permisos: rolPermisos.filter(rp => rp.id_rol === role.id_rol).map(rp => rp.id_permiso)
   }))
 
+  const workerAdminFilter = canManageWorkers ? '' : 'WHERE t.id_trabajador = ?'
+  const workerAdminParams = canManageWorkers ? [] : [getCurrentWorkerId() ?? -1]
   const workers = database.prepare(`
     SELECT t.id_trabajador, t.id_usuario, t.cedula, t.nombres, t.apellidos, t.cargo, t.salario_base, t.estado, t.creado_en, ur.id_rol 
     FROM trabajadores t
     LEFT JOIN usuario_rol ur ON ur.id_usuario = t.id_usuario
+    ${workerAdminFilter}
     ORDER BY t.nombres ASC
-  `).all() as WorkerRow[]
-  const auditLogs = database.prepare(`
+  `).all(...workerAdminParams) as WorkerRow[]
+  const auditLogs = access.isAdminLike ? database.prepare(`
     SELECT l.id_log, COALESCE(u.username, 'Sistema') AS usuario, l.accion, l.modulo, l.descripcion, l.fecha_evento 
     FROM auditoria_logs l 
     LEFT JOIN usuarios u ON u.id_usuario = l.id_usuario 
     ORDER BY l.fecha_evento DESC LIMIT 50
-  `).all() as AuditLogRow[]
+  `).all() as AuditLogRow[] : []
   
-  const permissions = database.prepare('SELECT id_permiso, nombre, descripcion, modulo, creado_en FROM permisos ORDER BY modulo ASC, nombre ASC').all() as PermissionRow[]
+  const permissions = canManageRoles
+    ? (database.prepare('SELECT id_permiso, nombre, descripcion, modulo, creado_en FROM permisos ORDER BY modulo ASC, nombre ASC').all() as PermissionRow[])
+    : []
 
   const totalStock = products.reduce((sum, product) => sum + toNumber(product.stock_actual), 0)
   const lowStockProducts = products.filter((product) => toNumber(product.stock_actual) <= toNumber(product.stock_minimo)).length
@@ -408,6 +534,8 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
     sales,
     attendances,
     workHoursSummary,
+    shiftHistory,
+    shiftRotationSummary,
     roles,
     workers,
     auditLogs,
@@ -416,9 +544,12 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
 }
 
 export function registerAttendanceEntry(database: Database.Database, input: AttendanceFormInput) {
+  requirePermission(database, 'REGISTRAR_ASISTENCIAS')
+
   const transaction = database.transaction((payload: AttendanceFormInput) => {
     assertRequiredId(payload.id_trabajador, 'un trabajador')
     assertRequiredId(payload.id_turno, 'un turno')
+    assertAttendanceWorkerScope(database, Number(payload.id_trabajador))
 
     const worker = database
       .prepare("SELECT id_trabajador FROM trabajadores WHERE id_trabajador = ? AND estado = 'activo'")
@@ -472,8 +603,11 @@ export function registerAttendanceEntry(database: Database.Database, input: Atte
 }
 
 export function registerAttendanceExit(database: Database.Database, input: AttendanceFormInput) {
+  requirePermission(database, 'REGISTRAR_ASISTENCIAS')
+
   const transaction = database.transaction((payload: AttendanceFormInput) => {
     assertRequiredId(payload.id_trabajador, 'un trabajador')
+    assertAttendanceWorkerScope(database, Number(payload.id_trabajador))
 
     const openAttendance = getOpenAttendance(database, payload.id_trabajador)
 
@@ -504,6 +638,8 @@ export function registerAttendanceExit(database: Database.Database, input: Atten
 }
 
 export function saveProduct(database: Database.Database, input: ProductFormInput) {
+  requirePermission(database, 'GESTIONAR_INVENTARIO')
+
   const transaction = database.transaction((payload: ProductFormInput) => {
     assertRequiredText(payload.codigo, 'El codigo')
     assertRequiredText(payload.nombre, 'El nombre del producto')
@@ -607,6 +743,8 @@ export function saveProduct(database: Database.Database, input: ProductFormInput
 }
 
 export function createMovement(database: Database.Database, input: MovementFormInput) {
+  requirePermission(database, 'REGISTRAR_MOVIMIENTOS')
+
   const transaction = database.transaction((payload: MovementFormInput) => {
     assertRequiredId(payload.id_producto, 'un producto')
     assertPositiveNumber(payload.cantidad, 'La cantidad')
@@ -669,6 +807,8 @@ export function createMovement(database: Database.Database, input: MovementFormI
 }
 
 export function createSale(database: Database.Database, input: SaleFormInput) {
+  requirePermission(database, 'REGISTRAR_VENTAS')
+
   const transaction = database.transaction((payload: SaleFormInput) => {
     if (!payload.detalles.length) {
       throw new Error('La venta debe tener al menos un producto.')
@@ -874,6 +1014,8 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
 }
 
 export function closeInventory(database: Database.Database, input: InventoryAuditInput): InventoryAuditResult {
+  requirePermission(database, 'GESTIONAR_INVENTARIO')
+
   const transaction = database.transaction((payload: InventoryAuditInput) => {
     const timestamp = nowSql()
     const details: InventoryAuditResultItem[] = []

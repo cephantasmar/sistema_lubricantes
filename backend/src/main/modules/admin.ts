@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { RoleFormInput, WorkerFormInput } from '../../shared/ipc/contracts'
-import { logAudit } from './auth'
+import { logAudit, requirePermission } from './auth'
 
 function getNextId(db: Database.Database, tableName: string, idColumn: string): number {
   const stmt = db.prepare(`SELECT MAX(${idColumn}) as maxId FROM ${tableName}`)
@@ -8,17 +8,37 @@ function getNextId(db: Database.Database, tableName: string, idColumn: string): 
   return (result.maxId ?? 0) + 1
 }
 
+function padDatePart(value: number) {
+  return String(value).padStart(2, '0')
+}
+
+function localDateTimeSql() {
+  const date = new Date()
+
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`
+}
+
+function localDateDisplaySql() {
+  const date = new Date()
+
+  return `${padDatePart(date.getDate())}-${padDatePart(date.getMonth() + 1)}-${date.getFullYear()}`
+}
+
 export function saveRole(db: Database.Database, payload: RoleFormInput) {
+  requirePermission(db, 'GESTIONAR_ROLES')
+
   const transaction = db.transaction(() => {
     let roleId = payload.id_rol
+    const timestamp = localDateTimeSql()
+
     if (roleId) {
-      const stmt = db.prepare(`UPDATE roles SET nombre = ?, descripcion = ?, estado = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id_rol = ?`)
-      stmt.run(payload.nombre, payload.descripcion, payload.estado ? 1 : 0, roleId)
+      const stmt = db.prepare(`UPDATE roles SET nombre = ?, descripcion = ?, estado = ?, actualizado_en = ? WHERE id_rol = ?`)
+      stmt.run(payload.nombre, payload.descripcion, payload.estado ? 1 : 0, timestamp, roleId)
       logAudit(db, 'UPDATE', 'roles', roleId, `Rol ${payload.nombre} actualizado`)
     } else {
       roleId = getNextId(db, 'roles', 'id_rol')
-      const stmt = db.prepare(`INSERT INTO roles (id_rol, nombre, descripcion, estado, creado_en) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`)
-      stmt.run(roleId, payload.nombre, payload.descripcion, payload.estado ? 1 : 0)
+      const stmt = db.prepare(`INSERT INTO roles (id_rol, nombre, descripcion, estado, creado_en) VALUES (?, ?, ?, ?, ?)`)
+      stmt.run(roleId, payload.nombre, payload.descripcion, payload.estado ? 1 : 0, timestamp)
       logAudit(db, 'INSERT', 'roles', roleId, `Rol ${payload.nombre} creado`)
     }
     if (payload.permisos) {
@@ -35,9 +55,12 @@ export function saveRole(db: Database.Database, payload: RoleFormInput) {
 }
 
 export function saveWorker(db: Database.Database, payload: WorkerFormInput) {
+  requirePermission(db, 'GESTIONAR_TRABAJADORES')
+
   const transaction = db.transaction(() => {
     let workerId = payload.id_trabajador
     let userId: number | null = null
+    const timestamp = localDateTimeSql()
 
     // Check if worker exists to see if we should preserve existing id_usuario
     if (workerId) {
@@ -50,19 +73,19 @@ export function saveWorker(db: Database.Database, payload: WorkerFormInput) {
     if (payload.crear_usuario && !userId) {
       userId = getNextId(db, 'usuarios', 'id_usuario')
       const username = (payload.nombres.split(' ')[0] + payload.apellidos.split(' ')[0]).toLowerCase()
-      const stmtUser = db.prepare(`INSERT INTO usuarios (id_usuario, username, email, password_hash, estado, creado_en) VALUES (?, ?, ?, ?, 'activo', CURRENT_TIMESTAMP)`)
-      stmtUser.run(userId, username, `${username}@local`, '12345') // Default password
+      const stmtUser = db.prepare(`INSERT INTO usuarios (id_usuario, username, email, password_hash, estado, creado_en) VALUES (?, ?, ?, ?, 'activo', ?)`)
+      stmtUser.run(userId, username, `${username}@local`, '12345', timestamp) // Default password
       logAudit(db, 'INSERT', 'usuarios', userId, `Usuario ${username} creado automáticamente`)
     }
 
     if (workerId) {
-      const stmt = db.prepare(`UPDATE trabajadores SET nombres = ?, apellidos = ?, cedula = ?, cargo = ?, salario_base = ?, estado = ?, id_usuario = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id_trabajador = ?`)
-      stmt.run(payload.nombres, payload.apellidos, payload.cedula, payload.cargo, payload.salario_base, payload.estado, userId, workerId)
+      const stmt = db.prepare(`UPDATE trabajadores SET nombres = ?, apellidos = ?, cedula = ?, cargo = ?, salario_base = ?, estado = ?, id_usuario = ?, actualizado_en = ? WHERE id_trabajador = ?`)
+      stmt.run(payload.nombres, payload.apellidos, payload.cedula, payload.cargo, payload.salario_base, payload.estado, userId, timestamp, workerId)
       logAudit(db, 'UPDATE', 'trabajadores', workerId, `Trabajador ${payload.nombres} actualizado`)
     } else {
       workerId = getNextId(db, 'trabajadores', 'id_trabajador')
-      const stmt = db.prepare(`INSERT INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, cargo, salario_base, estado, fecha_ingreso, creado_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, date('now'), CURRENT_TIMESTAMP)`)
-      stmt.run(workerId, userId, payload.cedula, payload.nombres, payload.apellidos, payload.cargo, payload.salario_base, payload.estado)
+      const stmt = db.prepare(`INSERT INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, cargo, salario_base, estado, fecha_ingreso, creado_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      stmt.run(workerId, userId, payload.cedula, payload.nombres, payload.apellidos, payload.cargo, payload.salario_base, payload.estado, localDateDisplaySql(), timestamp)
       logAudit(db, 'INSERT', 'trabajadores', workerId, `Trabajador ${payload.nombres} creado`)
     }
 

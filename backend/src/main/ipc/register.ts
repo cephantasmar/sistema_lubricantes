@@ -12,7 +12,6 @@ import {
 } from '../modules/store'
 import { login } from '../modules/auth'
 import { saveRole, saveWorker } from '../modules/admin'
-import { recordAttendance } from '../modules/shifts'
 
 let handlersRegistered = false
 
@@ -71,7 +70,4 @@ export function registerSystemIpc(database: Database.Database) {
     return saveWorker(database, payload)
   })
 
-  ipcMain.handle('shifts:record-attendance', (_event, payload) => {
-    return recordAttendance(database, payload)
-  })
 }
