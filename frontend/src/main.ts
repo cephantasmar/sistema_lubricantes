@@ -45,6 +45,7 @@ let appInfoSnapshot: { appName: string; version: string; databasePath: string } 
 let inventorySearchTerm = ''
 let inventorySearchField: InventorySearchField = 'all'
 let inventoryAuditSearchTerm = ''
+let clockInterval: number | null = null
 
 function hasPermission(permissionName: string) {
   return Boolean(currentUser?.isAdminLike || currentUser?.permissionNames.includes(permissionName))
@@ -73,7 +74,7 @@ function getFirstAccessibleTab(): TabName {
 function setActiveTab(tabName: TabName) {
   const nextTab = canAccessTab(tabName) ? tabName : getFirstAccessibleTab()
 
-  document.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => {
+  document.querySelectorAll<HTMLElement>('.tabs__button[data-tab]').forEach((button) => {
     const isActive = button.dataset.tab === nextTab
     button.classList.toggle('is-active', isActive)
     button.setAttribute('aria-selected', String(isActive))
@@ -144,6 +145,46 @@ function formatTime(value: string | null) {
   }).format(new Date(value))
 }
 
+function formatCurrentDate(value: Date) {
+  return new Intl.DateTimeFormat('es-BO', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(value)
+}
+
+function formatCurrentClock(value: Date) {
+  return new Intl.DateTimeFormat('es-BO', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(value)
+}
+
+function updateClock() {
+  const now = new Date()
+  const clock = formatCurrentClock(now)
+  const date = formatCurrentDate(now)
+
+  document.querySelectorAll<HTMLElement>('#landing-clock, #topbar-clock').forEach((element) => {
+    element.textContent = clock
+  })
+  document.querySelectorAll<HTMLElement>('#landing-date, #topbar-date').forEach((element) => {
+    element.textContent = date
+  })
+}
+
+function startClock() {
+  updateClock()
+
+  if (clockInterval) {
+    window.clearInterval(clockInterval)
+  }
+
+  clockInterval = window.setInterval(updateClock, 1000)
+}
+
 function getFormValues<T extends HTMLElement>(form: HTMLFormElement) {
   return new FormData(form) as unknown as FormData & {
     get(name: string): FormDataEntryValue | null
@@ -211,6 +252,21 @@ function renderMetricCards(data: BootstrapData) {
   `).join('')
   if (metricsContainer) metricsContainer.innerHTML = markup
   if (quickStats) quickStats.innerHTML = markup
+}
+
+function renderLanding() {
+  const welcome = document.querySelector<HTMLHeadingElement>('#landing-welcome')
+  const message = document.querySelector<HTMLParagraphElement>('#landing-message')
+  const userName = currentUser?.nombres || currentUser?.username || 'Usuario'
+  const roleName = currentUser?.roleNames.length ? currentUser.roleNames.join(', ') : 'sin rol asignado'
+
+  if (welcome) {
+    welcome.textContent = `Bienvenido, ${userName}`
+  }
+
+  if (message) {
+    message.textContent = `Rol: ${roleName}. Revisa el estado del negocio y continua con tus tareas del dia.`
+  }
 }
 
 function renderAppInfo(data: BootstrapData) {
@@ -1383,6 +1439,7 @@ function readRequiredId(formData: FormData, name: string, label: string) {
 
 async function refresh() {
   bootstrapData = await window.inventoryApi.getBootstrapData()
+  renderLanding()
   renderMetricCards(bootstrapData)
   renderAppInfo(bootstrapData)
   applyAccessControl()
@@ -1412,6 +1469,7 @@ async function refresh() {
 
 async function bootstrap() {
   appInfoSnapshot = await window.inventoryApi.getAppInfo()
+  startClock()
 
   await refresh()
 
@@ -1799,6 +1857,10 @@ function initLogin() {
   const logoutBtn = document.getElementById('logout-btn')
   logoutBtn?.addEventListener('click', () => {
     currentUser = null
+    if (clockInterval) {
+      window.clearInterval(clockInterval)
+      clockInterval = null
+    }
     const loginForm = document.getElementById('login-form') as HTMLFormElement | null
     loginForm?.reset()
     document.getElementById('main-app')!.style.display = 'none'
