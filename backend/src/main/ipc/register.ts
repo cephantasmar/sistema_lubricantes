@@ -10,6 +10,7 @@ import {
   registerAttendanceEntry,
   registerAttendanceExit,
   saveProduct,
+  getSalesReport,
 } from '../modules/store'
 import { login } from '../modules/auth'
 import { saveRole, saveWorker } from '../modules/admin'
@@ -54,6 +55,10 @@ export function registerSystemIpc(database: Database.Database) {
 
   ipcMain.handle('sales:get-sale-detail', (_event, saleId) => {
     return getSaleDetail(database, saleId)
+  })
+
+  ipcMain.handle('sales:get-sales-report', (_event, payload) => {
+    return getSalesReport(database, payload)
   })
 
   ipcMain.handle('attendance:register-entry', (_event, payload) => {

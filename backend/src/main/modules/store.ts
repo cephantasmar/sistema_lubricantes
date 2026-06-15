@@ -22,6 +22,8 @@ import type {
   RoleRow,
   AuditLogRow,
   PermissionRow,
+  SalesReportInput,
+  SalesReportData,
 } from '../../shared/ipc/contracts'
 
 const SYSTEM_USER_ID = 1
@@ -1218,4 +1220,168 @@ function getOpenAttendance(database: Database.Database, workerId: number) {
     `,
     )
     .get(workerId) as { id_asistencia: number; observacion: string | null } | undefined
+}
+
+export function getSalesReport(database: Database.Database, input: SalesReportInput): SalesReportData {
+  const { startDate, endDate } = input
+
+  // 1. Profit report (SCRUM-16)
+  const profitRows = database.prepare(`
+    SELECT
+      v.id_venta,
+      v.numero_factura,
+      v.fecha_venta,
+      t.nombres || ' ' || t.apellidos AS vendedor,
+      COALESCE(c.nombre, 'Consumidor final') AS cliente,
+      v.subtotal,
+      v.descuento_total AS descuento,
+      v.total,
+      COALESCE(vd.costo_total, 0) AS costo,
+      v.total - COALESCE(vd.costo_total, 0) AS ganancia,
+      CASE 
+        WHEN v.total > 0 THEN ((v.total - COALESCE(vd.costo_total, 0)) / v.total) * 100
+        ELSE 0
+      END AS margen,
+      v.estado
+    FROM ventas v
+    INNER JOIN trabajadores t ON t.id_trabajador = v.id_vendedor
+    LEFT JOIN clientes c ON c.id_cliente = v.id_cliente
+    LEFT JOIN (
+      SELECT 
+        id_venta,
+        SUM(cantidad * precio_costo_unitario) AS costo_total
+      FROM venta_detalles
+      GROUP BY id_venta
+    ) vd ON vd.id_venta = v.id_venta
+    WHERE DATE(v.fecha_venta) BETWEEN ? AND ? AND v.estado != 'ANULADA'
+    ORDER BY v.fecha_venta DESC, v.id_venta DESC
+  `).all(startDate, endDate) as any[]
+
+  const profitReport = profitRows.map((r) => ({
+    id_venta: Number(r.id_venta),
+    numero_factura: String(r.numero_factura),
+    fecha_venta: String(r.fecha_venta),
+    vendedor: String(r.vendedor),
+    cliente: String(r.cliente),
+    subtotal: Number(r.subtotal),
+    descuento: Number(r.descuento),
+    total: Number(r.total),
+    costo: Number(r.costo),
+    ganancia: Number(r.ganancia),
+    margen: Number(r.margen),
+    estado: String(r.estado),
+  }))
+
+  // 2. Cash flow report (SCRUM-18)
+  const cashFlowRows = database.prepare(`
+    SELECT
+      mp.nombre AS metodo_pago,
+      SUM(pv.monto) AS total_recibido,
+      COUNT(pv.referencia_pago) AS referencias_count
+    FROM pagos_venta pv
+    INNER JOIN metodos_pago mp ON mp.id_metodo = pv.id_metodo_pago
+    INNER JOIN ventas v ON v.id_venta = pv.id_venta
+    WHERE DATE(v.fecha_venta) BETWEEN ? AND ? AND v.estado != 'ANULADA'
+    GROUP BY pv.id_metodo_pago
+  `).all(startDate, endDate) as any[]
+
+  const cashFlowReport = cashFlowRows.map((r) => ({
+    metodo_pago: String(r.metodo_pago),
+    total_recibido: Number(r.total_recibido),
+    referencias_count: Number(r.referencias_count),
+  }))
+
+  // 3. KPIs
+  const totalVendido = roundMoney(profitReport.reduce((sum, r) => sum + r.total, 0))
+  const totalCosto = roundMoney(profitReport.reduce((sum, r) => sum + r.costo, 0))
+  const totalGanancia = roundMoney(totalVendido - totalCosto)
+  const totalDescuentos = roundMoney(profitReport.reduce((sum, r) => sum + r.descuento, 0))
+  const cantidadVentas = profitReport.length
+  
+  const totalCobrado = roundMoney(cashFlowReport.reduce((sum, r) => sum + r.total_recibido, 0))
+  const saldoPendiente = roundMoney(totalVendido > totalCobrado ? totalVendido - totalCobrado : 0)
+
+  const kpis = {
+    totalVendido,
+    totalCobrado,
+    totalCosto,
+    totalGanancia,
+    totalDescuentos,
+    cantidadVentas,
+    saldoPendiente,
+  }
+
+  // 4. Charts data (SCRUM-17)
+  const brandRows = database.prepare(`
+    SELECT
+      m.nombre AS marca,
+      COUNT(DISTINCT v.id_venta) AS ventas_count,
+      SUM(vd.total_linea) AS total_vendido
+    FROM venta_detalles vd
+    INNER JOIN ventas v ON v.id_venta = vd.id_venta
+    INNER JOIN productos p ON p.id_producto = vd.id_producto
+    INNER JOIN marcas m ON m.id_marca = p.id_marca
+    WHERE DATE(v.fecha_venta) BETWEEN ? AND ? AND v.estado != 'ANULADA'
+    GROUP BY m.id_marca
+    ORDER BY total_vendido DESC
+  `).all(startDate, endDate) as any[]
+
+  const chartsBrands = brandRows.map((r) => ({
+    marca: String(r.marca),
+    ventas_count: Number(r.ventas_count),
+    total_vendido: Number(r.total_vendido),
+  }))
+
+  const shiftRows = database.prepare(`
+    SELECT
+      COALESCE(tu.nombre, 'Sin turno') AS turno,
+      COUNT(v.id_venta) AS ventas_count,
+      SUM(v.total) AS total_vendido
+    FROM ventas v
+    LEFT JOIN turnos tu ON tu.id_turno = v.id_turno
+    WHERE DATE(v.fecha_venta) BETWEEN ? AND ? AND v.estado != 'ANULADA'
+    GROUP BY v.id_turno
+    ORDER BY total_vendido DESC
+  `).all(startDate, endDate) as any[]
+
+  const chartsShifts = shiftRows.map((r) => ({
+    turno: String(r.turno),
+    ventas_count: Number(r.ventas_count),
+    total_vendido: Number(r.total_vendido),
+  }))
+
+  const dailyRows = database.prepare(`
+    SELECT
+      DATE(v.fecha_venta) AS fecha,
+      SUM(v.total) AS total_vendido,
+      SUM(v.total) - SUM(COALESCE(vd.costo_total, 0)) AS total_ganancia
+    FROM ventas v
+    LEFT JOIN (
+      SELECT 
+        id_venta,
+        SUM(cantidad * precio_costo_unitario) AS costo_total
+      FROM venta_detalles
+      GROUP BY id_venta
+    ) vd ON vd.id_venta = v.id_venta
+    WHERE DATE(v.fecha_venta) BETWEEN ? AND ? AND v.estado != 'ANULADA'
+    GROUP BY DATE(v.fecha_venta)
+    ORDER BY DATE(v.fecha_venta) ASC
+  `).all(startDate, endDate) as any[]
+
+  const chartsDaily = dailyRows.map((r) => ({
+    fecha: String(r.fecha),
+    total_vendido: Number(r.total_vendido),
+    total_ganancia: Number(r.total_ganancia),
+  }))
+
+  return {
+    kpis,
+    profitReport,
+    cashFlowReport,
+    charts: {
+      brands: chartsBrands,
+      shifts: chartsShifts,
+      daily: chartsDaily,
+    },
+  }
 }

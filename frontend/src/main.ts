@@ -13,9 +13,11 @@ import type {
   SaleFormInput,
   SaleFullDetail,
   WorkerFormInput,
+  SalesReportInput,
+  SalesReportData,
 } from '@shared/ipc/contracts'
 
-type TabName = 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion'
+type TabName = 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion' | 'reportes'
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
 
@@ -73,6 +75,9 @@ function setActiveTab(tabName: TabName) {
     setTimeout(() => {
       document.querySelector<HTMLInputElement>('#sale-product-search')?.focus()
     }, 50)
+  } else if (tabName === 'reportes') {
+    initReportDates()
+    void loadSalesReportData()
   }
 }
 
@@ -327,6 +332,7 @@ const productOptions = data.products.map((product) => ({
       monedaSelect.value = '1'
     }
     updateSaleCurrencyRate()
+    updateSaleShift()
   }
 
   if (attendanceForm) {
@@ -1034,6 +1040,11 @@ function renderProductSearchResults(query = '') {
   container.querySelectorAll<HTMLButtonElement>('[data-sale-product]').forEach((button) => {
     button.addEventListener('click', () => {
       addProductToCart(Number(button.dataset.saleProduct))
+      const searchInput = document.querySelector<HTMLInputElement>('#sale-product-search')
+      if (searchInput) {
+        searchInput.value = ''
+      }
+      renderProductSearchResults('')
     })
   })
 }
@@ -1136,6 +1147,31 @@ function updateSaleCurrencyRate() {
   const rate = getLocalCurrencyRate(idMoneda)
   rateInput.value = rate.toFixed(4)
   renderSaleCart()
+}
+
+function updateSaleShift() {
+  if (!bootstrapData) return
+  const saleForm = document.querySelector<HTMLFormElement>('#sale-form')
+  if (!saleForm) return
+  const vendedorSelect = saleForm.elements.namedItem('id_vendedor') as HTMLSelectElement
+  const shiftSelect = saleForm.elements.namedItem('id_turno') as HTMLSelectElement
+  if (!vendedorSelect || !shiftSelect) return
+
+  const workerId = Number(vendedorSelect.value)
+  if (!workerId) {
+    shiftSelect.value = ''
+    return
+  }
+
+  const activeAttendance = bootstrapData.attendances.find(
+    (att) => att.id_trabajador === workerId && att.estado === 'EN_TURNO'
+  )
+
+  if (activeAttendance) {
+    shiftSelect.value = String(activeAttendance.id_turno)
+  } else {
+    shiftSelect.value = ''
+  }
 }
 
 function renderSalePayments() {
@@ -1773,87 +1809,100 @@ async function bootstrap() {
     setStatus('sale-status', 'Carrito limpio.', 'info')
   })
 
-  saleForm?.addEventListener('submit', async (event) => {
-    event.preventDefault()
+  if (saleForm) {
+    saleForm.onsubmit = async (event) => {
+      event.preventDefault()
 
-    if (!bootstrapData) {
-      return
-    }
-
-    const formData = new FormData(saleForm)
-    const subtotal = getSaleSubtotal()
-
-    const discountManual = String(formData.get('descuento_total') ?? '').trim()
-      ? Number(formData.get('descuento_total'))
-      : 0
-
-    if (saleCart.size === 0) {
-      setStatus('sale-status', 'Agrega al menos un producto antes de confirmar la venta.', 'error')
-      return
-    }
-
-    if (!Number.isFinite(discountManual) || discountManual < 0) {
-      setStatus('sale-status', 'El descuento manual no puede ser negativo.', 'error')
-      return
-    }
-
-    const idClienteVal = formData.get('id_cliente') ? Number(formData.get('id_cliente')) : 0
-    const idCliente = idClienteVal > 0 ? idClienteVal : null
-
-    const idVendedorVal = Number(formData.get('id_vendedor') ?? 0)
-    if (!idVendedorVal) {
-      setStatus('sale-status', 'Debe seleccionar un vendedor.', 'error')
-      return
-    }
-
-    const idTurnoVal = formData.get('id_turno') ? Number(formData.get('id_turno')) : 0
-    const idTurno = idTurnoVal > 0 ? idTurnoVal : null
-
-    const idMoneda = Number(formData.get('id_moneda') ?? 1)
-    const tasaCambio = Number(formData.get('tasa_cambio_aplicada') ?? 1)
-
-    // Distributed general discount manual share
-    const details = Array.from(saleCart.values()).map((item) => {
-      const subtotalLine = roundMoney(Number(item.product.precio_venta) * item.cantidad)
-      const lineManualShare = subtotal === 0 ? 0 : roundMoney((subtotalLine / subtotal) * discountManual)
-      const lineManualShareUnit = roundMoney(lineManualShare / item.cantidad)
-      const totalDescuentoUnitario = roundMoney((item.descuento_unitario ?? 0) + lineManualShareUnit)
-
-      return {
-        id_producto: item.product.id_producto,
-        cantidad: item.cantidad,
-        descuento_unitario: totalDescuentoUnitario,
-        id_descuento: null as number | null
+      if (!bootstrapData) {
+        return
       }
-    })
 
-    const payload: SaleFormInput = {
-      id_cliente: idCliente,
-      id_vendedor: idVendedorVal,
-      id_turno: idTurno,
-      id_moneda: idMoneda,
-      tasa_cambio_aplicada: tasaCambio,
-      observacion: String(formData.get('observacion') ?? '').trim() || null,
-      detalles: details,
-      pagos: salePayments.map(pago => ({
-        id_metodo_pago: pago.id_metodo_pago,
-        id_moneda: pago.id_moneda,
-        monto: pago.monto,
-        referencia_pago: pago.referencia_pago
-      }))
+      const formData = new FormData(saleForm)
+      const subtotal = getSaleSubtotal()
+
+      const discountManual = String(formData.get('descuento_total') ?? '').trim()
+        ? Number(formData.get('descuento_total'))
+        : 0
+
+      if (saleCart.size === 0) {
+        setStatus('sale-status', 'Agrega al menos un producto antes de confirmar la venta.', 'error')
+        return
+      }
+
+      if (!Number.isFinite(discountManual) || discountManual < 0) {
+        setStatus('sale-status', 'El descuento manual no puede ser negativo.', 'error')
+        return
+      }
+
+      const idClienteVal = formData.get('id_cliente') ? Number(formData.get('id_cliente')) : 0
+      const idCliente = idClienteVal > 0 ? idClienteVal : null
+
+      const idVendedorVal = Number(formData.get('id_vendedor') ?? 0)
+      if (!idVendedorVal) {
+        setStatus('sale-status', 'Debe seleccionar un vendedor.', 'error')
+        return
+      }
+
+      const idTurnoVal = formData.get('id_turno') ? Number(formData.get('id_turno')) : 0
+      const idTurno = idTurnoVal > 0 ? idTurnoVal : null
+
+      const idMoneda = Number(formData.get('id_moneda') ?? 1)
+      const tasaCambio = Number(formData.get('tasa_cambio_aplicada') ?? 1)
+
+      // Distributed general discount manual share
+      const details = Array.from(saleCart.values()).map((item) => {
+        const subtotalLine = roundMoney(Number(item.product.precio_venta) * item.cantidad)
+        const lineManualShare = subtotal === 0 ? 0 : roundMoney((subtotalLine / subtotal) * discountManual)
+        const lineManualShareUnit = roundMoney(lineManualShare / item.cantidad)
+        const totalDescuentoUnitario = roundMoney((item.descuento_unitario ?? 0) + lineManualShareUnit)
+
+        return {
+          id_producto: item.product.id_producto,
+          cantidad: item.cantidad,
+          descuento_unitario: totalDescuentoUnitario,
+          id_descuento: null as number | null
+        }
+      })
+
+      const payload: SaleFormInput = {
+        id_cliente: idCliente,
+        id_vendedor: idVendedorVal,
+        id_turno: idTurno,
+        id_moneda: idMoneda,
+        tasa_cambio_aplicada: tasaCambio,
+        observacion: String(formData.get('observacion') ?? '').trim() || null,
+        detalles: details,
+        pagos: salePayments.map(pago => ({
+          id_metodo_pago: pago.id_metodo_pago,
+          id_moneda: pago.id_moneda,
+          monto: pago.monto,
+          referencia_pago: pago.referencia_pago
+        }))
+      }
+      const submitBtn = saleForm.querySelector<HTMLButtonElement>('button[type="submit"]')
+      if (submitBtn) {
+        submitBtn.disabled = true
+        submitBtn.textContent = 'Procesando...'
+      }
+
+      try {
+        await window.inventoryApi.createSale(payload)
+        setStatus('sale-status', 'Venta registrada correctamente.', 'success')
+        saleCart.clear()
+        salePayments.length = 0
+        saleForm.reset()
+        renderSalePayments()
+        await refresh()
+      } catch (error) {
+        setStatus('sale-status', getFriendlyErrorMessage(error, 'No se pudo registrar la venta.'), 'error')
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false
+          submitBtn.textContent = 'Confirmar venta'
+        }
+      }
     }
-    try {
-      await window.inventoryApi.createSale(payload)
-      setStatus('sale-status', 'Venta registrada correctamente.', 'success')
-      saleCart.clear()
-      salePayments.length = 0
-      saleForm.reset()
-      renderSalePayments()
-      await refresh()
-    } catch (error) {
-      setStatus('sale-status', getFriendlyErrorMessage(error, 'No se pudo registrar la venta.'), 'error')
-    }
-  })
+  }
 
   attendanceForm?.querySelectorAll<HTMLButtonElement>('[data-attendance-action]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -1993,6 +2042,10 @@ async function bootstrap() {
     updateSaleCurrencyRate()
   })
 
+  document.querySelector('#sale-form select[name="id_vendedor"]')?.addEventListener('change', () => {
+    updateSaleShift()
+  })
+
   document.querySelector<HTMLInputElement>('#inventory-search')?.addEventListener('input', async (event) => {
     inventorySearchTerm = (event.target as HTMLInputElement).value
     if (bootstrapData) {
@@ -2032,6 +2085,23 @@ async function bootstrap() {
     if (bootstrapData) {
       renderInventoryChecklist(bootstrapData)
     }
+  })
+
+  // Reportes tab handlers
+  document.querySelector<HTMLButtonElement>('#report-generate-btn')?.addEventListener('click', () => {
+    void loadSalesReportData()
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('.report-subtab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.report-subtab-btn').forEach((b) => b.classList.remove('is-active'))
+      btn.classList.add('is-active')
+      const targetSubpanel = btn.dataset.subtab
+      document.querySelectorAll('.report-table-panel').forEach((panel) => {
+        const p = panel as HTMLElement
+        p.classList.toggle('is-active', p.dataset.subpanel === targetSubpanel)
+      })
+    })
   })
 }
 
@@ -2161,6 +2231,388 @@ function initLogin() {
     loginForm?.reset()
     document.getElementById('main-app')!.style.display = 'none'
     document.getElementById('login-overlay')!.style.display = 'flex'
+  })
+}
+
+void initLogin()
+
+function initReportDates() {
+  const startDateInput = document.querySelector<HTMLInputElement>('#report-start-date')
+  const endDateInput = document.querySelector<HTMLInputElement>('#report-end-date')
+  if (startDateInput && !startDateInput.value) {
+    const today = new Date()
+    const yyyy = today.getFullYear()
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const dd = String(today.getDate()).padStart(2, '0')
+    startDateInput.value = `${yyyy}-${mm}-${dd}`
+  }
+  if (endDateInput && !endDateInput.value) {
+    const today = new Date()
+    const yyyy = today.getFullYear()
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const dd = String(today.getDate()).padStart(2, '0')
+    endDateInput.value = `${yyyy}-${mm}-${dd}`
+  }
+}
+
+async function loadSalesReportData() {
+  const startDateInput = document.querySelector<HTMLInputElement>('#report-start-date')
+  const endDateInput = document.querySelector<HTMLInputElement>('#report-end-date')
+  if (!startDateInput || !endDateInput) return
+
+  const startDate = startDateInput.value
+  const endDate = endDateInput.value
+  if (!startDate || !endDate) return
+
+  const btn = document.querySelector<HTMLButtonElement>('#report-generate-btn')
+  if (btn) {
+    btn.disabled = true
+    btn.textContent = 'Cargando...'
+  }
+
+  try {
+    const reportData = await window.inventoryApi.getSalesReport({ startDate, endDate })
+
+    // Render KPIs
+    document.querySelector('#kpi-total-vendido')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalVendido)}`
+    document.querySelector('#kpi-total-costo')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalCosto)}`
+    document.querySelector('#kpi-total-ganancia')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalGanancia)}`
+    document.querySelector('#kpi-total-cobrado')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalCobrado)}`
+    document.querySelector('#kpi-saldo-pendiente')!.textContent = `Bs ${formatCurrency(reportData.kpis.saldoPendiente)}`
+
+    // Update sales count badge
+    document.querySelector('#report-sales-count')!.textContent = `${reportData.kpis.cantidadVentas} ventas`
+
+    // Render Profits Table (SCRUM-16)
+    const profitsBody = document.querySelector('#report-profits-table tbody')
+    if (profitsBody) {
+      if (reportData.profitReport.length === 0) {
+        profitsBody.innerHTML = `<tr><td colspan="9" class="empty-state">No se registraron ventas en este rango de fechas.</td></tr>`
+      } else {
+        profitsBody.innerHTML = reportData.profitReport.map(row => `
+          <tr>
+            <td><strong>${escapeHtml(row.numero_factura)}</strong></td>
+            <td>${escapeHtml(row.fecha_venta.slice(0, 16).replace('T', ' '))}</td>
+            <td>${escapeHtml(row.vendedor)}</td>
+            <td>${escapeHtml(row.cliente)}</td>
+            <td style="text-align: right; font-weight: bold;">Bs ${escapeHtml(formatCurrency(row.total))}</td>
+            <td style="text-align: right; color: var(--muted);">Bs ${escapeHtml(formatCurrency(row.costo))}</td>
+            <td style="text-align: right; color: var(--success); font-weight: bold;">Bs ${escapeHtml(formatCurrency(row.ganancia))}</td>
+            <td style="text-align: right; color: var(--accent); font-weight: bold;">${escapeHtml(formatCurrency(row.margen))}%</td>
+            <td style="text-align: center;"><span class="status-badge ${row.estado.toLowerCase() === 'completada' ? 'status-badge--success' : 'status-badge--warning'}">${escapeHtml(row.estado)}</span></td>
+          </tr>
+        `).join('')
+      }
+    }
+
+    // Render Cash Flow Table (SCRUM-18)
+    const cashflowBody = document.querySelector('#report-cashflow-table tbody')
+    if (cashflowBody) {
+      if (reportData.cashFlowReport.length === 0) {
+        cashflowBody.innerHTML = `<tr><td colspan="3" class="empty-state">No se registraron cobros en este rango de fechas.</td></tr>`
+      } else {
+        cashflowBody.innerHTML = reportData.cashFlowReport.map(row => `
+          <tr>
+            <td><strong>${escapeHtml(row.metodo_pago)}</strong></td>
+            <td style="text-align: right; font-weight: bold; color: var(--success);">Bs ${escapeHtml(formatCurrency(row.total_recibido))}</td>
+            <td style="text-align: center; color: var(--muted);">${escapeHtml(row.referencias_count)} transacciones</td>
+          </tr>
+        `).join('')
+      }
+    }
+
+    // Render Charts (SCRUM-17)
+    renderBrandChart('brand-chart-container', reportData.charts.brands)
+    renderShiftChart('shift-chart-container', reportData.charts.shifts)
+    renderDailyTrendChart('daily-chart-container', reportData.charts.daily)
+
+  } catch (error) {
+    alert(error instanceof Error ? error.message : 'Error al generar el reporte.')
+  } finally {
+    if (btn) {
+      btn.disabled = false
+      btn.textContent = 'Generar Reporte'
+    }
+  }
+}
+
+function renderBrandChart(containerId: string, data: { marca: string; total_vendido: number }[]) {
+  const container = document.getElementById(containerId)
+  if (!container) return
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="empty-state">No hay datos de marcas.</div>'
+    return
+  }
+
+  const width = container.clientWidth || 300
+  const height = 200
+  const paddingLeft = 90
+  const paddingRight = 80
+  const paddingTop = 10
+  const paddingBottom = 10
+  const rowHeight = (height - paddingTop - paddingBottom) / Math.max(data.length, 1)
+
+  const maxValue = Math.max(...data.map(d => d.total_vendido), 1)
+
+  let svgContent = `<svg class="chart-svg" width="100%" height="${height}" viewBox="0 0 ${width} ${height}">`
+
+  let tooltipEl = container.querySelector('.chart-tooltip-el') as HTMLElement
+  if (!tooltipEl) {
+    tooltipEl = document.createElement('div')
+    tooltipEl.className = 'chart-tooltip-el'
+    container.appendChild(tooltipEl)
+  }
+
+  data.forEach((d, idx) => {
+    const y = paddingTop + idx * rowHeight + (rowHeight - 24) / 2
+    const barMaxWidth = width - paddingLeft - paddingRight
+    const barWidth = Math.max((d.total_vendido / maxValue) * barMaxWidth, 4)
+
+    svgContent += `
+      <g class="chart-group" data-label="${escapeHtml(d.marca)}" data-value="Bs ${escapeHtml(formatCurrency(d.total_vendido))}">
+        <text class="chart-text" x="${paddingLeft - 10}" y="${y + 16}" text-anchor="end" style="font-weight: 600;">${escapeHtml(d.marca)}</text>
+        <rect x="${paddingLeft}" y="${y}" width="${barMaxWidth}" height="24" rx="4" fill="#f1f5f9" />
+        <rect class="chart-bar" x="${paddingLeft}" y="${y}" width="${barWidth}" height="24" rx="4" fill="url(#brandGrad)" />
+        <text class="chart-text" x="${paddingLeft + barWidth + 8}" y="${y + 16}" style="font-weight: 700; fill: var(--text);">${escapeHtml(formatCurrency(d.total_vendido))}</text>
+      </g>
+    `
+  })
+
+  svgContent += `
+    <defs>
+      <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#0ea5a6" />
+        <stop offset="100%" stop-color="#0f766e" />
+      </linearGradient>
+    </defs>
+  `
+
+  svgContent += '</svg>'
+  container.innerHTML = svgContent
+  container.appendChild(tooltipEl)
+
+  container.querySelectorAll('.chart-group').forEach(group => {
+    group.addEventListener('mouseenter', () => {
+      const label = group.getAttribute('data-label')
+      const val = group.getAttribute('data-value')
+      tooltipEl.innerHTML = `<strong>${label}</strong><br/>${val}`
+      tooltipEl.style.opacity = '1'
+    })
+    group.addEventListener('mousemove', (e: any) => {
+      const rect = container.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      tooltipEl.style.left = `${x}px`
+      tooltipEl.style.top = `${y}px`
+    })
+    group.addEventListener('mouseleave', () => {
+      tooltipEl.style.opacity = '0'
+    })
+  })
+}
+
+function renderShiftChart(containerId: string, data: { turno: string; total_vendido: number }[]) {
+  const container = document.getElementById(containerId)
+  if (!container) return
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="empty-state">No hay datos de turnos.</div>'
+    return
+  }
+
+  const width = container.clientWidth || 300
+  const height = 200
+  const paddingLeft = 50
+  const paddingRight = 20
+  const paddingTop = 20
+  const paddingBottom = 40
+
+  const colWidth = (width - paddingLeft - paddingRight) / Math.max(data.length, 1)
+  const maxValue = Math.max(...data.map(d => d.total_vendido), 1)
+
+  let svgContent = `<svg class="chart-svg" width="100%" height="${height}" viewBox="0 0 ${width} ${height}">`
+
+  let tooltipEl = container.querySelector('.chart-tooltip-el') as HTMLElement
+  if (!tooltipEl) {
+    tooltipEl = document.createElement('div')
+    tooltipEl.className = 'chart-tooltip-el'
+    container.appendChild(tooltipEl)
+  }
+
+  const gridLinesCount = 4
+  const chartHeight = height - paddingTop - paddingBottom
+  const chartWidth = width - paddingLeft - paddingRight
+
+  for (let i = 0; i <= gridLinesCount; i++) {
+    const y = paddingTop + (chartHeight / gridLinesCount) * i
+    const val = maxValue - (maxValue / gridLinesCount) * i
+    svgContent += `
+      <line class="chart-grid-line" x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" />
+      <text class="chart-text" x="${paddingLeft - 8}" y="${y + 4}" text-anchor="end">${escapeHtml(Math.round(val))}</text>
+    `
+  }
+
+  data.forEach((d, idx) => {
+    const barHeight = (d.total_vendido / maxValue) * chartHeight
+    const x = paddingLeft + idx * colWidth + (colWidth - 36) / 2
+    const y = height - paddingBottom - barHeight
+
+    svgContent += `
+      <g class="chart-group" data-label="${escapeHtml(d.turno)}" data-value="Bs ${escapeHtml(formatCurrency(d.total_vendido))}">
+        <rect x="${x}" y="${paddingTop}" width="36" height="${chartHeight}" rx="4" fill="#f1f5f9" />
+        <rect class="chart-bar" x="${x}" y="${y}" width="36" height="${barHeight}" rx="4" fill="url(#shiftGrad)" />
+        <text class="chart-text" x="${x + 18}" y="${height - paddingBottom + 16}" text-anchor="middle" style="font-weight: 600;">${escapeHtml(d.turno)}</text>
+      </g>
+    `
+  })
+
+  svgContent += `
+    <defs>
+      <linearGradient id="shiftGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+        <stop offset="0%" stop-color="#9333ea" />
+        <stop offset="100%" stop-color="#7c3aed" />
+      </linearGradient>
+    </defs>
+  `
+
+  svgContent += '</svg>'
+  container.innerHTML = svgContent
+  container.appendChild(tooltipEl)
+
+  container.querySelectorAll('.chart-group').forEach(group => {
+    group.addEventListener('mouseenter', () => {
+      const label = group.getAttribute('data-label')
+      const val = group.getAttribute('data-value')
+      tooltipEl.innerHTML = `<strong>${label}</strong><br/>${val}`
+      tooltipEl.style.opacity = '1'
+    })
+    group.addEventListener('mousemove', (e: any) => {
+      const rect = container.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      tooltipEl.style.left = `${x}px`
+      tooltipEl.style.top = `${y}px`
+    })
+    group.addEventListener('mouseleave', () => {
+      tooltipEl.style.opacity = '0'
+    })
+  })
+}
+
+function renderDailyTrendChart(containerId: string, data: { fecha: string; total_vendido: number; total_ganancia: number }[]) {
+  const container = document.getElementById(containerId)
+  if (!container) return
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="empty-state">No hay datos de evolución diaria.</div>'
+    return
+  }
+
+  const width = container.clientWidth || 600
+  const height = 220
+  const paddingLeft = 50
+  const paddingRight = 20
+  const paddingTop = 20
+  const paddingBottom = 40
+
+  const chartWidth = width - paddingLeft - paddingRight
+  const chartHeight = height - paddingTop - paddingBottom
+
+  const maxVal = Math.max(...data.map(d => Math.max(d.total_vendido, d.total_ganancia)), 1)
+
+  let svgContent = `<svg class="chart-svg" width="100%" height="${height}" viewBox="0 0 ${width} ${height}">`
+
+  let tooltipEl = container.querySelector('.chart-tooltip-el') as HTMLElement
+  if (!tooltipEl) {
+    tooltipEl = document.createElement('div')
+    tooltipEl.className = 'chart-tooltip-el'
+    container.appendChild(tooltipEl)
+  }
+
+  const gridLinesCount = 4
+  for (let i = 0; i <= gridLinesCount; i++) {
+    const y = paddingTop + (chartHeight / gridLinesCount) * i
+    const val = maxVal - (maxVal / gridLinesCount) * i
+    svgContent += `
+      <line class="chart-grid-line" x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" />
+      <text class="chart-text" x="${paddingLeft - 8}" y="${y + 4}" text-anchor="end">${escapeHtml(Math.round(val))}</text>
+    `
+  }
+
+  const totalPoints = data.length
+  const stepX = totalPoints > 1 ? chartWidth / (totalPoints - 1) : chartWidth
+
+  const salesPoints = data.map((d, i) => {
+    const x = paddingLeft + i * stepX
+    const y = height - paddingBottom - (d.total_vendido / maxVal) * chartHeight
+    return { x, y, val: d.total_vendido, label: d.fecha }
+  })
+
+  const profitPoints = data.map((d, i) => {
+    const x = paddingLeft + i * stepX
+    const y = height - paddingBottom - (d.total_ganancia / maxVal) * chartHeight
+    return { x, y, val: d.total_ganancia, label: d.fecha }
+  })
+
+  const getLinePath = (points: { x: number; y: number }[]) => {
+    return points.reduce((path, p, i) => path + (i === 0 ? `M ${p.x} ${p.y}` : ` L ${p.x} ${p.y}`), '')
+  }
+
+  const getAreaPath = (points: { x: number; y: number }[]) => {
+    if (points.length === 0) return ''
+    const startX = points[0].x
+    const endX = points[points.length - 1].x
+    const yBase = height - paddingBottom
+    return `${getLinePath(points)} L ${endX} ${yBase} L ${startX} ${yBase} Z`
+  }
+
+  svgContent += `<path class="chart-area" d="${getAreaPath(salesPoints)}" fill="#0284c7" />`
+  svgContent += `<path class="chart-line" d="${getLinePath(salesPoints)}" stroke="#0284c7" stroke-width="3" />`
+
+  svgContent += `<path class="chart-area" d="${getAreaPath(profitPoints)}" fill="#16a34a" />`
+  svgContent += `<path class="chart-line" d="${getLinePath(profitPoints)}" stroke="#16a34a" stroke-width="3" />`
+
+  salesPoints.forEach((p, i) => {
+    const pr = profitPoints[i]
+    const showLabel = totalPoints <= 7 || i % Math.ceil(totalPoints / 7) === 0
+    if (showLabel) {
+      const dateParts = p.label.split('-')
+      const formattedDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}` : p.label
+      svgContent += `
+        <text class="chart-text" x="${p.x}" y="${height - paddingBottom + 18}" text-anchor="middle" style="font-weight: 600;">${escapeHtml(formattedDate)}</text>
+      `
+    }
+
+    svgContent += `
+      <circle class="chart-dot chart-group" cx="${p.x}" cy="${p.y}" r="4" fill="#ffffff" stroke="#0284c7" stroke-width="2" 
+        data-label="Vendido (${escapeHtml(p.label)})" data-value="Bs ${escapeHtml(formatCurrency(p.val))}" />
+    `
+
+    svgContent += `
+      <circle class="chart-dot chart-group" cx="${pr.x}" cy="${pr.y}" r="4" fill="#ffffff" stroke="#16a34a" stroke-width="2" 
+        data-label="Ganancia (${escapeHtml(pr.label)})" data-value="Bs ${escapeHtml(formatCurrency(pr.val))}" />
+    `
+  })
+
+  svgContent += '</svg>'
+  container.innerHTML = svgContent
+  container.appendChild(tooltipEl)
+
+  container.querySelectorAll('.chart-group').forEach(group => {
+    group.addEventListener('mouseenter', () => {
+      const label = group.getAttribute('data-label')
+      const val = group.getAttribute('data-value')
+      tooltipEl.innerHTML = `<strong>${label}</strong><br/>${val}`
+      tooltipEl.style.opacity = '1'
+    })
+    group.addEventListener('mousemove', (e: any) => {
+      const rect = container.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      tooltipEl.style.left = `${x}px`
+      tooltipEl.style.top = `${y}px`
+    })
+    group.addEventListener('mouseleave', () => {
+      tooltipEl.style.opacity = '0'
+    })
   })
 }
 

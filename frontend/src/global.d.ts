@@ -14,7 +14,9 @@ import type {
   AuthResult,
   RoleFormInput,
   WorkerFormInput,
-  AttendanceInput
+  AttendanceInput,
+  SalesReportInput,
+  SalesReportData
 } from '@shared/ipc/contracts'
 
 declare global {
@@ -27,6 +29,7 @@ declare global {
       closeInventory: (payload: InventoryAuditInput) => Promise<InventoryAuditResult>
       createSale: (payload: SaleFormInput) => Promise<{ saleId: number }>
       getSaleDetail: (saleId: number) => Promise<SaleFullDetail>
+      getSalesReport: (payload: SalesReportInput) => Promise<SalesReportData>
       registerAttendanceEntry: (payload: AttendanceFormInput) => Promise<{ attendanceId: number }>
       registerAttendanceExit: (payload: AttendanceFormInput) => Promise<{ attendanceId: number }>
       login: (payload: AuthInput) => Promise<AuthResult>

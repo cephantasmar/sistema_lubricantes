@@ -326,3 +326,68 @@ export type BootstrapData = {
   auditLogs: AuditLogRow[]
   permissions: PermissionRow[]
 }
+
+export type SalesReportInput = {
+  startDate: string // YYYY-MM-DD
+  endDate: string // YYYY-MM-DD
+}
+
+export type SalesReportKPIs = {
+  totalVendido: number
+  totalCobrado: number
+  totalCosto: number
+  totalGanancia: number
+  totalDescuentos: number
+  cantidadVentas: number
+  saldoPendiente: number
+}
+
+export type ProfitReportRow = {
+  id_venta: number
+  numero_factura: string
+  fecha_venta: string
+  vendedor: string
+  cliente: string
+  subtotal: number
+  descuento: number
+  total: number
+  costo: number
+  ganancia: number
+  margen: number
+  estado: string
+}
+
+export type CashFlowReportRow = {
+  metodo_pago: string
+  total_recibido: number
+  referencias_count: number
+}
+
+export type ChartDataBrand = {
+  marca: string
+  ventas_count: number
+  total_vendido: number
+}
+
+export type ChartDataShift = {
+  turno: string
+  ventas_count: number
+  total_vendido: number
+}
+
+export type ChartDataDaily = {
+  fecha: string
+  total_vendido: number
+  total_ganancia: number
+}
+
+export type SalesReportData = {
+  kpis: SalesReportKPIs
+  profitReport: ProfitReportRow[]
+  cashFlowReport: CashFlowReportRow[]
+  charts: {
+    brands: ChartDataBrand[]
+    shifts: ChartDataShift[]
+    daily: ChartDataDaily[]
+  }
+}

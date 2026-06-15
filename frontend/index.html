@@ -70,6 +70,7 @@
           <button class="tabs__button" type="button" data-tab="turnos" role="tab" aria-selected="false">Turnos</button>
           <button class="tabs__button" type="button" data-tab="asistencias" role="tab" aria-selected="false">Asistencias</button>
           <button class="tabs__button" type="button" data-tab="administracion" role="tab" aria-selected="false">Administración</button>
+          <button class="tabs__button" type="button" data-tab="reportes" role="tab" aria-selected="false">Reportes</button>
         </nav>
 
         <div class="tab-panels">
@@ -537,6 +538,178 @@
                 </section>
               </div>
             </section>
+
+          <section class="tab-panel" data-panel="reportes" role="tabpanel">
+            <div class="report-toolbar">
+              <div>
+                <h2 class="report-toolbar__title">Reportes y Dashboard</h2>
+                <p class="report-toolbar__subtitle">Análisis de rendimiento, ganancias diarias y control de caja.</p>
+              </div>
+              <div class="report-toolbar__filters">
+                <label class="field field--inline">
+                  <span>Desde</span>
+                  <input id="report-start-date" type="date" />
+                </label>
+                <label class="field field--inline">
+                  <span>Hasta</span>
+                  <input id="report-end-date" type="date" />
+                </label>
+                <button class="button button--primary" id="report-generate-btn" type="button">Generar Reporte</button>
+              </div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="report-kpis-grid">
+              <div class="kpi-card kpi-card--sales">
+                <div class="kpi-card__icon">💰</div>
+                <div class="kpi-card__content">
+                  <span class="kpi-card__label">Total Vendido</span>
+                  <strong class="kpi-card__value" id="kpi-total-vendido">Bs 0.00</strong>
+                </div>
+              </div>
+              <div class="kpi-card kpi-card--cost">
+                <div class="kpi-card__icon">📦</div>
+                <div class="kpi-card__content">
+                  <span class="kpi-card__label">Costo de Ventas</span>
+                  <strong class="kpi-card__value" id="kpi-total-costo">Bs 0.00</strong>
+                </div>
+              </div>
+              <div class="kpi-card kpi-card--profit">
+                <div class="kpi-card__icon">📈</div>
+                <div class="kpi-card__content">
+                  <span class="kpi-card__label">Ganancia Neta</span>
+                  <strong class="kpi-card__value" id="kpi-total-ganancia">Bs 0.00</strong>
+                </div>
+              </div>
+              <div class="kpi-card kpi-card--cash">
+                <div class="kpi-card__icon">📥</div>
+                <div class="kpi-card__content">
+                  <span class="kpi-card__label">Total Cobrado (Caja)</span>
+                  <strong class="kpi-card__value" id="kpi-total-cobrado">Bs 0.00</strong>
+                </div>
+              </div>
+              <div class="kpi-card kpi-card--pending">
+                <div class="kpi-card__icon">⏳</div>
+                <div class="kpi-card__content">
+                  <span class="kpi-card__label">Saldo Pendiente</span>
+                  <strong class="kpi-card__value" id="kpi-saldo-pendiente">Bs 0.00</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Reports and Charts Layout -->
+            <div class="report-main-layout">
+              <!-- Left Column: Tables -->
+              <div class="report-tables-section">
+                <!-- Secondary tabs for switching tables -->
+                <div class="report-subtabs">
+                  <button class="report-subtab-btn is-active" data-subtab="ganancias" type="button">Detalle de Ganancias</button>
+                  <button class="report-subtab-btn" data-subtab="caja" type="button">Flujo de Caja (Ventas vs Cobros)</button>
+                </div>
+
+                <!-- Profits Table -->
+                <div class="report-table-panel is-active" data-subpanel="ganancias">
+                  <div class="module-card">
+                    <div class="module-card__header">
+                      <div>
+                        <span class="module-kicker">SCRUM-16</span>
+                        <h2>Reporte de Ganancia Diario</h2>
+                      </div>
+                      <span class="module-badge" id="report-sales-count">0 ventas</span>
+                    </div>
+                    <div class="table-wrap">
+                      <table class="data-table" id="report-profits-table">
+                        <thead>
+                          <tr>
+                            <th>Factura</th>
+                            <th>Fecha</th>
+                            <th>Vendedor</th>
+                            <th>Cliente</th>
+                            <th style="text-align: right;">Total</th>
+                            <th style="text-align: right;">Costo Hist.</th>
+                            <th style="text-align: right;">Ganancia</th>
+                            <th style="text-align: right;">Margen</th>
+                            <th style="text-align: center;">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr><td colspan="9" class="empty-state">Seleccione un rango de fechas y haga clic en Generar.</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Cash Flow Table -->
+                <div class="report-table-panel" data-subpanel="caja">
+                  <div class="module-card">
+                    <div class="module-card__header">
+                      <div>
+                        <span class="module-kicker">SCRUM-18</span>
+                        <h2>Arqueo de Caja (Cuánto se vende vs cuánto entra)</h2>
+                      </div>
+                    </div>
+                    <div class="table-wrap">
+                      <table class="data-table" id="report-cashflow-table">
+                        <thead>
+                          <tr>
+                            <th>Método de Pago</th>
+                            <th style="text-align: right;">Total Recibido</th>
+                            <th style="text-align: center;">Transacciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr><td colspan="3" class="empty-state">Seleccione un rango de fechas y haga clic en Generar.</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Column: Interactive Charts -->
+              <div class="report-charts-section">
+                <!-- Brand Chart Card -->
+                <div class="module-card chart-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Distribución</span>
+                      <h2>Ventas por Marca</h2>
+                    </div>
+                  </div>
+                  <div class="chart-container" id="brand-chart-container">
+                    <div class="empty-state">No hay datos de marcas.</div>
+                  </div>
+                </div>
+
+                <!-- Shift Chart Card -->
+                <div class="module-card chart-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Rendimiento</span>
+                      <h2>Ventas por Turno</h2>
+                    </div>
+                  </div>
+                  <div class="chart-container" id="shift-chart-container">
+                    <div class="empty-state">No hay datos de turnos.</div>
+                  </div>
+                </div>
+
+                <!-- Daily Trend Card -->
+                <div class="module-card chart-card chart-card--wide">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Evolución</span>
+                      <h2>Tendencia Diaria (Ventas vs Ganancias)</h2>
+                    </div>
+                  </div>
+                  <div class="chart-container" id="daily-chart-container">
+                    <div class="empty-state">No hay datos de evolución diaria.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
 
           <section class="tab-panel" data-panel="turnos" role="tabpanel">
               <div class="module-layout">
