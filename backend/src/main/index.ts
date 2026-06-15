@@ -18,7 +18,7 @@ async function createWindow() {
     title: 'Inventario de Aceites',
     backgroundColor: '#0f172a',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,

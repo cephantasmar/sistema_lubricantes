@@ -1,16 +1,27 @@
 import type Database from 'better-sqlite3'
 import type {
+  AttendanceFormInput,
+  AttendanceRow,
   BootstrapData,
+  InventoryAuditInput,
+  InventoryAuditResult,
+  InventoryAuditResultItem,
   MovementFormInput,
   MovementRow,
   ProductFormInput,
   ProductRow,
   ReferenceItem,
-  SaleFormInput,
-  SaleRow,
-  SaleFullDetail,
   SaleDetailRow,
+  SaleFormInput,
+  SaleFullDetail,
   SalePaymentRow,
+  SaleRow,
+  ShiftRow,
+  WorkerRow,
+  WorkHoursSummaryRow,
+  RoleRow,
+  AuditLogRow,
+  PermissionRow,
 } from '../../shared/ipc/contracts'
 
 const SYSTEM_USER_ID = 1
@@ -48,8 +59,33 @@ const PRODUCT_STOCK_QUERY = `
   ORDER BY p.nombre ASC, p.id_producto ASC
 `
 
+function padDatePart(value: number) {
+  return String(value).padStart(2, '0')
+}
+
+function localDateParts() {
+  const date = new Date()
+
+  return {
+    year: date.getFullYear(),
+    month: padDatePart(date.getMonth() + 1),
+    day: padDatePart(date.getDate()),
+    hours: padDatePart(date.getHours()),
+    minutes: padDatePart(date.getMinutes()),
+    seconds: padDatePart(date.getSeconds()),
+  }
+}
+
 function nowSql() {
-  return new Date().toISOString().slice(0, 19).replace('T', ' ')
+  const date = localDateParts()
+
+  return `${date.year}-${date.month}-${date.day} ${date.hours}:${date.minutes}:${date.seconds}`
+}
+
+function todaySql() {
+  const { year, month, day } = localDateParts()
+
+  return `${day}-${month}-${year}`
 }
 
 function toNumber(value: unknown) {
@@ -63,6 +99,42 @@ function roundMoney(value: number) {
 function normalizeText(value: string | null | undefined) {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
+}
+
+function assertRequiredText(value: string | null | undefined, fieldName: string) {
+  if (!normalizeText(value)) {
+    throw new Error(`${fieldName} es obligatorio.`)
+  }
+}
+
+function assertRequiredId(value: unknown, fieldName: string) {
+  const numberValue = Number(value)
+
+  if (!Number.isInteger(numberValue) || numberValue <= 0) {
+    throw new Error(`Selecciona ${fieldName}.`)
+  }
+}
+
+function assertFiniteNumber(value: unknown, fieldName: string) {
+  if (!Number.isFinite(Number(value))) {
+    throw new Error(`${fieldName} debe ser un numero valido.`)
+  }
+}
+
+function assertPositiveNumber(value: unknown, fieldName: string) {
+  assertFiniteNumber(value, fieldName)
+
+  if (Number(value) <= 0) {
+    throw new Error(`${fieldName} debe ser mayor que cero.`)
+  }
+}
+
+function assertNonNegativeNumber(value: unknown, fieldName: string) {
+  assertFiniteNumber(value, fieldName)
+
+  if (Number(value) < 0) {
+    throw new Error(`${fieldName} no puede ser negativo.`)
+  }
 }
 
 function getNextId(database: Database.Database, tableName: string, columnName: string) {
@@ -129,17 +201,37 @@ export function getReferenceData(database: Database.Database) {
     descripcion: string | null
   }>
 
-  const trabajadores = database.prepare("SELECT id_trabajador AS id, nombres || ' ' || apellidos AS nombre, cargo AS descripcion FROM trabajadores WHERE estado = 'ACTIVO' ORDER BY nombres ASC").all() as Array<{
-    id: number
-    nombre: string
-    descripcion: string | null
-  }>
+  const trabajadores = database
+    .prepare(
+      `
+      SELECT
+        id_trabajador,
+        id_usuario,
+        cedula,
+        nombres,
+        apellidos,
+        nombres || ' ' || apellidos AS nombre_completo,
+        cargo,
+        salario_base,
+        estado,
+        creado_en
+      FROM trabajadores
+      WHERE LOWER(estado) = 'activo'
+      ORDER BY nombres ASC, apellidos ASC
+    `,
+    )
+    .all() as WorkerRow[]
 
-  const turnos = database.prepare("SELECT id_turno AS id, nombre || ' (' || hora_inicio || ' - ' || hora_fin || ')' AS nombre, descripcion FROM turnos WHERE estado = 1 ORDER BY nombre ASC").all() as Array<{
-    id: number
-    nombre: string
-    descripcion: string | null
-  }>
+  const turnos = database
+    .prepare(
+      `
+      SELECT id_turno, nombre, hora_inicio, hora_fin, descripcion
+      FROM turnos
+      WHERE estado = 1
+      ORDER BY hora_inicio ASC, id_turno ASC
+    `,
+    )
+    .all() as ShiftRow[]
 
   const tiposCambio = database.prepare(`
     SELECT id_moneda, valor
@@ -158,8 +250,8 @@ export function getReferenceData(database: Database.Database) {
     monedas: monedas.map(mapReferenceItem),
     metodosPago: metodosPago.map(mapReferenceItem),
     clientes: clientes.map(mapReferenceItem),
-    trabajadores: trabajadores.map(mapReferenceItem),
-    turnos: turnos.map(mapReferenceItem),
+    trabajadores,
+    turnos,
     tiposCambio,
   }
 }
@@ -223,7 +315,7 @@ export function listSales(database: Database.Database): SaleRow[] {
       LEFT JOIN (
         SELECT
           pv.id_venta,
-          GROUP_CONCAT(mp.nombre, ', ') AS metodo_pago
+          MIN(mp.nombre) AS metodo_pago
         FROM pagos_venta pv
         INNER JOIN metodos_pago mp ON mp.id_metodo = pv.id_metodo_pago
         GROUP BY pv.id_venta
@@ -236,11 +328,95 @@ export function listSales(database: Database.Database): SaleRow[] {
     .all() as SaleRow[]
 }
 
+export function listAttendances(database: Database.Database): AttendanceRow[] {
+  return database
+    .prepare(
+      `
+      SELECT
+        a.id_asistencia,
+        a.id_trabajador,
+        t.nombres || ' ' || t.apellidos AS trabajador_nombre,
+        a.id_turno,
+        tu.nombre AS turno_nombre,
+        a.fecha,
+        a.hora_entrada,
+        a.hora_salida,
+        a.observacion,
+        CASE WHEN a.hora_salida IS NULL THEN 'EN_TURNO' ELSE 'COMPLETADO' END AS estado
+      FROM asistencias a
+      INNER JOIN trabajadores t ON t.id_trabajador = a.id_trabajador
+      INNER JOIN turnos tu ON tu.id_turno = a.id_turno
+      ORDER BY substr(a.fecha, 7, 4) || '-' || substr(a.fecha, 4, 2) || '-' || substr(a.fecha, 1, 2) DESC,
+        COALESCE(a.hora_salida, a.hora_entrada) DESC,
+        a.id_asistencia DESC
+      LIMIT 80
+    `,
+    )
+    .all() as AttendanceRow[]
+}
+
+export function listWorkHoursSummary(database: Database.Database): WorkHoursSummaryRow[] {
+  return database
+    .prepare(
+      `
+      SELECT
+        t.id_trabajador,
+        t.nombres || ' ' || t.apellidos AS trabajador_nombre,
+        t.cargo,
+        COUNT(a.id_asistencia) AS asistencias_completadas,
+        COALESCE(SUM(
+          CASE
+            WHEN a.hora_entrada IS NOT NULL AND a.hora_salida IS NOT NULL
+            THEN CAST((julianday(a.hora_salida) - julianday(a.hora_entrada)) * 24 * 60 AS INTEGER)
+            ELSE 0
+          END
+        ), 0) AS minutos_trabajados,
+        ROUND(COALESCE(SUM(
+          CASE
+            WHEN a.hora_entrada IS NOT NULL AND a.hora_salida IS NOT NULL
+            THEN (julianday(a.hora_salida) - julianday(a.hora_entrada)) * 24
+            ELSE 0
+          END
+        ), 0), 2) AS horas_trabajadas
+      FROM trabajadores t
+      LEFT JOIN asistencias a ON a.id_trabajador = t.id_trabajador AND a.hora_salida IS NOT NULL
+      WHERE t.estado = 'activo'
+      GROUP BY t.id_trabajador
+      ORDER BY horas_trabajadas DESC, trabajador_nombre ASC
+    `,
+    )
+    .all() as WorkHoursSummaryRow[]
+}
+
 export function getBootstrapData(database: Database.Database): BootstrapData {
   const products = listProducts(database)
   const movements = listMovements(database)
   const sales = listSales(database)
+  const attendances = listAttendances(database)
+  const workHoursSummary = listWorkHoursSummary(database)
   const references = getReferenceData(database)
+
+  const rolesData = database.prepare('SELECT id_rol, nombre, descripcion, estado, creado_en FROM roles ORDER BY id_rol ASC').all() as RoleRow[]
+  const rolPermisos = database.prepare('SELECT id_rol, id_permiso FROM rol_permiso').all() as {id_rol: number, id_permiso: number}[]
+  const roles = rolesData.map(role => ({
+    ...role,
+    permisos: rolPermisos.filter(rp => rp.id_rol === role.id_rol).map(rp => rp.id_permiso)
+  }))
+
+  const workers = database.prepare(`
+    SELECT t.id_trabajador, t.id_usuario, t.cedula, t.nombres, t.apellidos, t.cargo, t.salario_base, t.estado, t.creado_en, ur.id_rol 
+    FROM trabajadores t
+    LEFT JOIN usuario_rol ur ON ur.id_usuario = t.id_usuario
+    ORDER BY t.nombres ASC
+  `).all() as WorkerRow[]
+  const auditLogs = database.prepare(`
+    SELECT l.id_log, COALESCE(u.username, 'Sistema') AS usuario, l.accion, l.modulo, l.descripcion, l.fecha_evento 
+    FROM auditoria_logs l 
+    LEFT JOIN usuarios u ON u.id_usuario = l.id_usuario 
+    ORDER BY l.fecha_evento DESC LIMIT 50
+  `).all() as AuditLogRow[]
+  
+  const permissions = database.prepare('SELECT id_permiso, nombre, descripcion, modulo, creado_en FROM permisos ORDER BY modulo ASC, nombre ASC').all() as PermissionRow[]
 
   const totalStock = products.reduce((sum, product) => sum + toNumber(product.stock_actual), 0)
   const lowStockProducts = products.filter((product) => toNumber(product.stock_actual) <= toNumber(product.stock_minimo)).length
@@ -253,15 +429,122 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
       lowStockProducts,
       totalMovements: movements.length,
       totalSales: sales.length,
+      activeAttendances: attendances.filter((attendance) => attendance.estado === 'EN_TURNO').length,
     },
     products,
     movements,
     sales,
+    attendances,
+    workHoursSummary,
+    roles,
+    workers,
+    auditLogs,
+    permissions,
+  }
+}
+
+export function registerAttendanceEntry(database: Database.Database, input: AttendanceFormInput) {
+  const transaction = database.transaction((payload: AttendanceFormInput) => {
+    assertRequiredId(payload.id_trabajador, 'un trabajador')
+    assertRequiredId(payload.id_turno, 'un turno')
+
+    const worker = database
+      .prepare("SELECT id_trabajador FROM trabajadores WHERE id_trabajador = ? AND estado = 'activo'")
+      .get(payload.id_trabajador) as { id_trabajador: number } | undefined
+
+    if (!worker) {
+      throw new Error('El trabajador seleccionado no existe o no esta activo.')
+    }
+
+    const shift = database.prepare('SELECT id_turno FROM turnos WHERE id_turno = ? AND estado = 1').get(payload.id_turno) as
+      | { id_turno: number }
+      | undefined
+
+    if (!shift) {
+      throw new Error('Selecciona un turno activo.')
+    }
+
+    const openAttendance = getOpenAttendance(database, payload.id_trabajador)
+
+    if (openAttendance) {
+      throw new Error('Este trabajador ya tiene una entrada abierta. Registra su salida antes de iniciar otro turno.')
+    }
+
+    const attendanceId = getNextId(database, 'asistencias', 'id_asistencia')
+    const timestamp = nowSql()
+
+    database
+      .prepare(
+        `
+        INSERT INTO asistencias (
+          id_asistencia, id_trabajador, id_turno, fecha, hora_entrada, hora_salida, observacion, registrado_por
+        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
+      `,
+      )
+      .run(
+        attendanceId,
+        payload.id_trabajador,
+        payload.id_turno,
+        todaySql(),
+        timestamp,
+        normalizeText(payload.observacion),
+        payload.id_trabajador,
+      )
+
+    return attendanceId
+  })
+
+  return {
+    attendanceId: transaction(input),
+  }
+}
+
+export function registerAttendanceExit(database: Database.Database, input: AttendanceFormInput) {
+  const transaction = database.transaction((payload: AttendanceFormInput) => {
+    assertRequiredId(payload.id_trabajador, 'un trabajador')
+
+    const openAttendance = getOpenAttendance(database, payload.id_trabajador)
+
+    if (!openAttendance) {
+      throw new Error('Este trabajador no tiene una entrada abierta.')
+    }
+
+    const exitTime = nowSql()
+    const note = normalizeText(payload.observacion)
+    const nextObservation = [openAttendance.observacion, note ? `Salida: ${note}` : null].filter(Boolean).join(' | ') || null
+
+    database
+      .prepare(
+        `
+        UPDATE asistencias
+        SET hora_salida = ?, observacion = ?, registrado_por = ?
+        WHERE id_asistencia = ?
+      `,
+      )
+      .run(exitTime, nextObservation, payload.id_trabajador, openAttendance.id_asistencia)
+
+    return openAttendance.id_asistencia
+  })
+
+  return {
+    attendanceId: transaction(input),
   }
 }
 
 export function saveProduct(database: Database.Database, input: ProductFormInput) {
   const transaction = database.transaction((payload: ProductFormInput) => {
+    assertRequiredText(payload.codigo, 'El codigo')
+    assertRequiredText(payload.nombre, 'El nombre del producto')
+    assertRequiredText(payload.unidad_medida, 'La unidad de medida')
+    assertRequiredId(payload.id_marca, 'una marca')
+    if (payload.id_categoria !== null && payload.id_categoria !== undefined) {
+      assertRequiredId(payload.id_categoria, 'una categoria')
+    }
+    assertNonNegativeNumber(payload.precio_costo, 'El precio costo')
+    assertNonNegativeNumber(payload.precio_venta, 'El precio venta')
+    assertNonNegativeNumber(payload.stock_minimo, 'El stock minimo')
+    assertNonNegativeNumber(payload.stock_inicial, 'El stock inicial')
+
     const isEdit = Boolean(payload.id_producto)
     const productId = isEdit ? Number(payload.id_producto) : getNextId(database, 'productos', 'id_producto')
     const timestamp = nowSql()
@@ -353,8 +636,10 @@ export function saveProduct(database: Database.Database, input: ProductFormInput
 
 export function createMovement(database: Database.Database, input: MovementFormInput) {
   const transaction = database.transaction((payload: MovementFormInput) => {
-    if (payload.cantidad <= 0) {
-      throw new Error('La cantidad debe ser mayor que cero.')
+    assertRequiredId(payload.id_producto, 'un producto')
+    assertPositiveNumber(payload.cantidad, 'La cantidad')
+    if (payload.costo_unitario !== null && payload.costo_unitario !== undefined) {
+      assertNonNegativeNumber(payload.costo_unitario, 'El costo unitario')
     }
 
     const product = database.prepare('SELECT id_producto FROM productos WHERE id_producto = ?').get(payload.id_producto) as
@@ -412,16 +697,19 @@ export function createMovement(database: Database.Database, input: MovementFormI
 }
 
 function getCurrencyRate(database: Database.Database, idMoneda: number): number {
-  if (idMoneda === 1) return 1
   const currency = database.prepare('SELECT codigo FROM monedas WHERE id_moneda = ?').get(idMoneda) as { codigo: string } | undefined
   if (!currency || currency.codigo === 'BOB') return 1
 
-  const rate = database.prepare(`
-    SELECT valor FROM tipo_cambio
-    WHERE id_moneda = ?
-    ORDER BY registrado_en DESC
-    LIMIT 1
-  `).get(idMoneda) as { valor: number } | undefined
+  const rate = database
+    .prepare(
+      `
+      SELECT valor FROM tipo_cambio
+      WHERE id_moneda = ?
+      ORDER BY registrado_en DESC
+      LIMIT 1
+    `,
+    )
+    .get(idMoneda) as { valor: number } | undefined
 
   return rate ? Number(rate.valor) : 1
 }
@@ -467,7 +755,7 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
       const descUnit = Number(detail.descuento_unitario ?? 0)
 
       if (!Number.isFinite(productId) || productId <= 0) {
-        throw new Error('La venta contiene un producto inválido.')
+        throw new Error('La venta contiene un producto invalido.')
       }
 
       if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -479,11 +767,10 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
       }
 
       const current = normalizedDetails.get(productId)
-      const newQty = roundMoney((current?.cantidad ?? 0) + quantity)
       normalizedDetails.set(productId, {
-        cantidad: newQty,
+        cantidad: roundMoney((current?.cantidad ?? 0) + quantity),
         descuento_unitario: descUnit,
-        id_descuento: detail.id_descuento ?? null
+        id_descuento: detail.id_descuento ?? null,
       })
     })
 
@@ -512,7 +799,7 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
       }
 
       if (!product.estado) {
-        throw new Error(`El producto ${product.nombre} está inactivo.`)
+        throw new Error(`El producto ${product.nombre} esta inactivo.`)
       }
 
       const stockActual = getProductStock(database, productId)
@@ -525,7 +812,6 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
       if (discountLine > subtotalLine) {
         throw new Error(`El descuento del producto ${product.nombre} no puede ser mayor que su subtotal.`)
       }
-      const totalLine = roundMoney(subtotalLine - discountLine)
 
       lines.push({
         id_producto: product.id_producto,
@@ -535,53 +821,58 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
         precio_venta: Number(product.precio_venta),
         descuento_unitario: info.descuento_unitario,
         subtotal_linea: subtotalLine,
-        total_linea: totalLine,
-        id_descuento: info.id_descuento
+        total_linea: roundMoney(subtotalLine - discountLine),
+        id_descuento: info.id_descuento,
       })
     })
 
     const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.subtotal_linea, 0))
-    const discountTotal = roundMoney(lines.reduce((sum, line) => sum + (line.descuento_unitario * line.cantidad), 0))
+    const discountTotal = roundMoney(lines.reduce((sum, line) => sum + line.descuento_unitario * line.cantidad, 0))
     const total = roundMoney(subtotal - discountTotal)
 
     let totalPagadoInSaleCurrency = 0
     const paymentsWithSaleValue = payload.pagos.map((pago) => {
+      assertRequiredId(pago.id_metodo_pago, 'un metodo de pago')
+      assertRequiredId(pago.id_moneda, 'una moneda de pago')
+      assertPositiveNumber(pago.monto, 'El monto del pago')
+
+      const paymentMethod = database.prepare('SELECT id_metodo FROM metodos_pago WHERE id_metodo = ? AND estado = 1').get(pago.id_metodo_pago)
+      if (!paymentMethod) {
+        throw new Error('Uno de los metodos de pago no existe o esta inactivo.')
+      }
+
+      const paymentCurrency = database.prepare('SELECT id_moneda FROM monedas WHERE id_moneda = ?').get(pago.id_moneda)
+      if (!paymentCurrency) {
+        throw new Error('Una de las monedas de pago no existe.')
+      }
+
       const rateP = getCurrencyRate(database, pago.id_moneda)
       const rateS = payload.tasa_cambio_aplicada || getCurrencyRate(database, payload.id_moneda)
       const montoInSaleCurrency = roundMoney((pago.monto * rateP) / rateS)
       totalPagadoInSaleCurrency = roundMoney(totalPagadoInSaleCurrency + montoInSaleCurrency)
+
       return {
         ...pago,
         montoInSaleCurrency,
-        rateP
+        rateP,
       }
     })
 
     let estado = 'COMPLETADA'
-    let vueltoInSaleCurrency = 0
     if (totalPagadoInSaleCurrency < total) {
       estado = 'PENDIENTE'
     } else if (totalPagadoInSaleCurrency > total) {
-      vueltoInSaleCurrency = roundMoney(totalPagadoInSaleCurrency - total)
-      
-      const cashMethod = database.prepare("SELECT id_metodo FROM metodos_pago WHERE LOWER(nombre) LIKE '%efectivo%'").get() as { id_metodo: number } | undefined
-      const cashPaymentIdx = paymentsWithSaleValue.findIndex(p => cashMethod && p.id_metodo_pago === cashMethod.id_metodo)
+      const vueltoInSaleCurrency = roundMoney(totalPagadoInSaleCurrency - total)
+      const cashMethod = database.prepare("SELECT id_metodo FROM metodos_pago WHERE LOWER(nombre) LIKE '%efectivo%'").get() as
+        | { id_metodo: number }
+        | undefined
+      const cashPaymentIdx = paymentsWithSaleValue.findIndex((pago) => cashMethod && pago.id_metodo_pago === cashMethod.id_metodo)
+      const targetPayment = paymentsWithSaleValue[cashPaymentIdx !== -1 ? cashPaymentIdx : 0]
+      const rateS = payload.tasa_cambio_aplicada || getCurrencyRate(database, payload.id_moneda)
+      const vueltoInPaymentCurrency = roundMoney((vueltoInSaleCurrency * rateS) / targetPayment.rateP)
 
-      if (cashPaymentIdx !== -1) {
-        const cashPay = paymentsWithSaleValue[cashPaymentIdx]
-        const rateS = payload.tasa_cambio_aplicada || getCurrencyRate(database, payload.id_moneda)
-        const vueltoInCashCurrency = roundMoney((vueltoInSaleCurrency * rateS) / cashPay.rateP)
-        
-        cashPay.monto = roundMoney(cashPay.monto - vueltoInCashCurrency)
-        cashPay.montoInSaleCurrency = roundMoney(cashPay.montoInSaleCurrency - vueltoInSaleCurrency)
-      } else {
-        const firstPay = paymentsWithSaleValue[0]
-        const rateS = payload.tasa_cambio_aplicada || getCurrencyRate(database, payload.id_moneda)
-        const vueltoInPayCurrency = roundMoney((vueltoInSaleCurrency * rateS) / firstPay.rateP)
-        
-        firstPay.monto = roundMoney(firstPay.monto - vueltoInPayCurrency)
-        firstPay.montoInSaleCurrency = roundMoney(firstPay.montoInSaleCurrency - vueltoInSaleCurrency)
-      }
+      targetPayment.monto = roundMoney(targetPayment.monto - vueltoInPaymentCurrency)
+      targetPayment.montoInSaleCurrency = roundMoney(targetPayment.montoInSaleCurrency - vueltoInSaleCurrency)
     }
 
     const saleId = getNextId(database, 'ventas', 'id_venta')
@@ -610,7 +901,7 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
         payload.id_moneda,
         payload.tasa_cambio_aplicada,
         normalizeText(payload.observacion),
-        estado
+        estado,
       )
 
     lines.forEach((line) => {
@@ -636,7 +927,7 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
           line.descuento_unitario,
           line.subtotal_linea,
           line.total_linea,
-          line.id_descuento
+          line.id_descuento,
         )
 
       database
@@ -657,7 +948,7 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
           invoiceNumber,
           normalizeText(payload.observacion) ?? `Venta de ${line.nombre}`,
           payload.id_vendedor,
-          timestamp
+          timestamp,
         )
     })
 
@@ -672,15 +963,7 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
           `,
           )
-          .run(
-            paymentId,
-            saleId,
-            pago.id_metodo_pago,
-            pago.id_moneda,
-            pago.monto,
-            normalizeText(pago.referencia_pago),
-            timestamp
-          )
+          .run(paymentId, saleId, pago.id_metodo_pago, pago.id_moneda, pago.monto, normalizeText(pago.referencia_pago), timestamp)
       }
     })
 
@@ -716,9 +999,25 @@ export function getSaleDetail(database: Database.Database, saleId: number): Sale
       INNER JOIN trabajadores t ON t.id_trabajador = v.id_vendedor
       LEFT JOIN turnos tu ON tu.id_turno = v.id_turno
       WHERE v.id_venta = ?
-    `
+    `,
     )
-    .get(saleId) as any
+    .get(saleId) as
+    | {
+        id_venta: number
+        numero_factura: string
+        fecha_venta: string
+        subtotal: number
+        descuento_total: number
+        total: number
+        tasa_cambio: number
+        observacion: string | null
+        estado: string
+        moneda_codigo: string
+        cliente_nombre: string | null
+        vendedor_nombre: string
+        turno_nombre: string | null
+      }
+    | undefined
 
   if (!sale) {
     throw new Error('La venta solicitada no existe.')
@@ -740,7 +1039,7 @@ export function getSaleDetail(database: Database.Database, saleId: number): Sale
       FROM venta_detalles vd
       INNER JOIN productos p ON p.id_producto = vd.id_producto
       WHERE vd.id_venta = ?
-    `
+    `,
     )
     .all(saleId) as SaleDetailRow[]
 
@@ -756,12 +1055,12 @@ export function getSaleDetail(database: Database.Database, saleId: number): Sale
       INNER JOIN metodos_pago mp ON mp.id_metodo = pv.id_metodo_pago
       INNER JOIN monedas mo ON mo.id_moneda = pv.id_moneda
       WHERE pv.id_venta = ?
-    `
+    `,
     )
     .all(saleId) as SalePaymentRow[]
 
   const ganancia_total = roundMoney(
-    detalles.reduce((sum, item) => sum + (Number(item.total_linea) - (Number(item.precio_costo_unitario) * Number(item.cantidad))), 0)
+    detalles.reduce((sum, item) => sum + Number(item.total_linea) - Number(item.precio_costo_unitario) * Number(item.cantidad), 0),
   )
 
   return {
@@ -779,24 +1078,110 @@ export function getSaleDetail(database: Database.Database, saleId: number): Sale
     observacion: sale.observacion,
     estado: sale.estado,
     ganancia_total,
-    detalles: detalles.map((d) => ({
-      id_producto: Number(d.id_producto),
-      codigo: d.codigo,
-      nombre: d.nombre,
-      cantidad: Number(d.cantidad),
-      precio_unitario: Number(d.precio_unitario),
-      precio_costo_unitario: Number(d.precio_costo_unitario),
-      descuento_unitario: Number(d.descuento_unitario),
-      subtotal_linea: Number(d.subtotal_linea),
-      total_linea: Number(d.total_linea),
+    detalles: detalles.map((detail) => ({
+      id_producto: Number(detail.id_producto),
+      codigo: detail.codigo,
+      nombre: detail.nombre,
+      cantidad: Number(detail.cantidad),
+      precio_unitario: Number(detail.precio_unitario),
+      precio_costo_unitario: Number(detail.precio_costo_unitario),
+      descuento_unitario: Number(detail.descuento_unitario),
+      subtotal_linea: Number(detail.subtotal_linea),
+      total_linea: Number(detail.total_linea),
     })),
-    pagos: pagos.map((p) => ({
-      metodo_pago: p.metodo_pago,
-      moneda_codigo: p.moneda_codigo,
-      monto: Number(p.monto),
-      referencia_pago: p.referencia_pago,
+    pagos: pagos.map((payment) => ({
+      metodo_pago: payment.metodo_pago,
+      moneda_codigo: payment.moneda_codigo,
+      monto: Number(payment.monto),
+      referencia_pago: payment.referencia_pago,
     })),
   }
+}
+export function closeInventory(database: Database.Database, input: InventoryAuditInput): InventoryAuditResult {
+  const transaction = database.transaction((payload: InventoryAuditInput) => {
+    const timestamp = nowSql()
+    const details: InventoryAuditResultItem[] = []
+    let adjusted = 0
+
+    for (const item of payload.items) {
+      const product = database
+        .prepare('SELECT id_producto, nombre FROM productos WHERE id_producto = ?')
+        .get(item.id_producto) as { id_producto: number; nombre: string } | undefined
+
+      if (!product) {
+        continue
+      }
+
+      const stockSistema = getProductStock(database, item.id_producto)
+      const conteoFisico = Number(item.conteo_fisico)
+      const diferencia = conteoFisico - stockSistema
+
+      let tipoAjuste: InventoryAuditResultItem['tipo_ajuste'] = 'SIN_CAMBIO'
+
+      if (diferencia > 0) {
+        tipoAjuste = 'AJUSTE_POS'
+      } else if (diferencia < 0) {
+        tipoAjuste = 'AJUSTE_NEG'
+      }
+
+      if (item.precio_costo !== undefined && item.precio_costo !== null) {
+        database
+          .prepare('UPDATE productos SET precio_costo = ?, actualizado_en = ? WHERE id_producto = ?')
+          .run(item.precio_costo, timestamp, item.id_producto)
+      }
+
+      if (item.precio_venta !== undefined && item.precio_venta !== null) {
+        database
+          .prepare('UPDATE productos SET precio_venta = ?, actualizado_en = ? WHERE id_producto = ?')
+          .run(item.precio_venta, timestamp, item.id_producto)
+      }
+
+      if (diferencia !== 0) {
+        const movementId = getNextId(database, 'inventario_movimientos', 'id_movimiento')
+
+        database
+          .prepare(
+            `
+            INSERT INTO inventario_movimientos (
+              id_movimiento, id_producto, tipo_movimiento, cantidad, costo_unitario, motivo,
+              referencia, observacion, realizado_por, fecha_movimiento
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          )
+          .run(
+            movementId,
+            item.id_producto,
+            tipoAjuste,
+            Math.abs(diferencia),
+            item.precio_costo ?? null,
+            'Cierre de inventario físico',
+            `INV-${timestamp.slice(0, 10).replaceAll('-', '')}`,
+            normalizeText(payload.observacion) ?? 'Ajuste automático por cierre de inventario',
+            SYSTEM_USER_ID,
+            timestamp,
+          )
+
+        adjusted += 1
+      }
+
+      details.push({
+        id_producto: item.id_producto,
+        nombre: product.nombre,
+        stock_sistema: stockSistema,
+        conteo_fisico: conteoFisico,
+        diferencia,
+        tipo_ajuste: tipoAjuste,
+      })
+    }
+
+    return {
+      procesados: details.length,
+      ajustados: adjusted,
+      detalles: details,
+    }
+  })
+
+  return transaction(input)
 }
 
 function getProductStock(database: Database.Database, productId: number) {
@@ -819,4 +1204,18 @@ function getProductStock(database: Database.Database, productId: number) {
     | undefined
 
   return Number(product?.stock_actual ?? 0)
+}
+
+function getOpenAttendance(database: Database.Database, workerId: number) {
+  return database
+    .prepare(
+      `
+      SELECT id_asistencia, observacion
+      FROM asistencias
+      WHERE id_trabajador = ? AND hora_salida IS NULL
+      ORDER BY hora_entrada DESC, id_asistencia DESC
+      LIMIT 1
+    `,
+    )
+    .get(workerId) as { id_asistencia: number; observacion: string | null } | undefined
 }
