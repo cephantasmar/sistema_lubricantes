@@ -29,51 +29,85 @@
       </div>
     </div>
     <div class="shell" id="main-app" style="display: none;">
-      <header class="topbar">
-        <div class="brand-block">
-          <p class="brand-block__kicker">Gestión comercial</p>
-          <h1>Sistema de Inventario y Ventas</h1>
-          <p>Tienda de aceites y lubricantes</p>
-        </div>
 
-        <div class="topbar-widgets">
-          <section class="status-card">
-            <h2>Estado del sistema</h2>
-            <div id="app-info" class="info-list">
-              <div class="info-item">Cargando información del sistema...</div>
-            </div>
-          </section>
+      <div class="shell-body">
+        <aside class="sidebar" id="main-sidebar">
+          <div class="sidebar-header">
+            <h3>Menú</h3>
+            <button class="button button--ghost button--small" id="sidebar-toggle" title="Retraer menú"><i class="ti ti-menu-2"></i></button>
+          </div>
+          <nav class="tabs sidebar-tabs" role="tablist" aria-label="Secciones principales">
+            <button class="tabs__button is-active" type="button" data-tab="bienvenida" role="tab" aria-selected="true"><i class="ti ti-home"></i> Inicio</button>
+            <button class="tabs__button" type="button" data-tab="dashboard" role="tab" aria-selected="false"><i class="ti ti-layout-dashboard"></i> Dashboard</button>
+            <button class="tabs__button" type="button" data-tab="inventario" role="tab" aria-selected="false"><i class="ti ti-box"></i> Inventario</button>
+            <button class="tabs__button" type="button" data-tab="movimientos" role="tab" aria-selected="false"><i class="ti ti-arrows-exchange"></i> Movimientos</button>
+            <button class="tabs__button" type="button" data-tab="ventas" role="tab" aria-selected="false"><i class="ti ti-receipt"></i> Ventas</button>
+            <button class="tabs__button" type="button" data-tab="turnos" role="tab" aria-selected="false"><i class="ti ti-clock"></i> Turnos</button>
+            <button class="tabs__button" type="button" data-tab="asistencias" role="tab" aria-selected="false"><i class="ti ti-user-check"></i> Asistencias</button>
+            <button class="tabs__button" type="button" data-tab="administracion" role="tab" aria-selected="false"><i class="ti ti-settings"></i> Administración</button>
+          </nav>
+          <div class="sidebar-footer">
+            <button id="logout-btn"><i class="ti ti-logout"></i> <span>Cerrar sesión</span></button>
+          </div>
+        </aside>
 
-          <section class="status-card">
-            <h2>Resumen rápido</h2>
-            <div id="quick-stats" class="mini-stats"></div>
-          </section>
-
-          <section class="status-card">
-            <h2>Mi Cuenta</h2>
-            <div class="info-list">
-              <div class="info-item"><span>Usuario</span><strong id="nav-user-name">...</strong></div>
-              <div class="info-item"><span>Rol</span><strong id="nav-user-role">...</strong></div>
-            </div>
-            <button class="button button--ghost" id="logout-btn" style="margin-top: 10px; width: 100%; padding: 6px; font-size: 0.85rem; border-color: var(--danger); color: var(--danger);">Cerrar sesión</button>
-          </section>
-        </div>
-      </header>
-
-      <main class="workspace">
-        <section class="summary-grid" aria-label="Resumen del sistema" id="dashboard-metrics"></section>
-
-        <nav class="tabs" role="tablist" aria-label="Secciones principales">
-          <button class="tabs__button is-active" type="button" data-tab="inventario" role="tab" aria-selected="true">Inventario</button>
-          <button class="tabs__button" type="button" data-tab="movimientos" role="tab" aria-selected="false">Movimientos</button>
-          <button class="tabs__button" type="button" data-tab="ventas" role="tab" aria-selected="false">Ventas</button>
-          <button class="tabs__button" type="button" data-tab="turnos" role="tab" aria-selected="false">Turnos</button>
-          <button class="tabs__button" type="button" data-tab="asistencias" role="tab" aria-selected="false">Asistencias</button>
-          <button class="tabs__button" type="button" data-tab="administracion" role="tab" aria-selected="false">Administración</button>
-        </nav>
-
+        <main class="workspace">
         <div class="tab-panels">
-            <section class="tab-panel is-active" data-panel="inventario" role="tabpanel">
+            <section class="tab-panel is-active" data-panel="bienvenida" role="tabpanel">
+              <div class="welcome-banner">
+                <div class="brand-block">
+                  <p class="brand-block__kicker">Bienvenido</p>
+                  <h1>Sistema de Inventario y Ventas</h1>
+                  <p>Selecciona un módulo en la barra lateral para comenzar a trabajar.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="tab-panel" data-panel="dashboard" role="tabpanel">
+              <header class="topbar" style="margin-bottom: 16px;">
+                <div class="brand-block">
+                  <p class="brand-block__kicker">Gestión comercial</p>
+                  <h1>Sistema de Inventario y Ventas</h1>
+                  <p>Tienda de aceites y lubricantes</p>
+                </div>
+
+                <div class="topbar-widgets">
+                  <section class="status-card">
+                    <h2>Estado del sistema</h2>
+                    <div id="app-info" class="info-list">
+                      <div class="info-item">Cargando información del sistema...</div>
+                    </div>
+                  </section>
+
+                  <section class="status-card">
+                    <h2>Resumen rápido</h2>
+                    <div id="quick-stats" class="mini-stats"></div>
+                  </section>
+
+                  <section class="status-card">
+                    <h2>Mi Cuenta</h2>
+                    <div class="info-list">
+                      <div class="info-item"><span>Usuario</span><strong id="nav-user-name">...</strong></div>
+                      <div class="info-item"><span>Rol</span><strong id="nav-user-role">...</strong></div>
+                    </div>
+                  </section>
+                </div>
+              </header>
+
+              <div class="module-layout module-layout--inventory">
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Métricas</span>
+                      <h2>Estadísticas Globales</h2>
+                    </div>
+                  </div>
+                  <section class="summary-grid" aria-label="Resumen del sistema" id="dashboard-metrics"></section>
+                </section>
+              </div>
+            </section>
+
+            <section class="tab-panel" data-panel="inventario" role="tabpanel">
               <div class="inventory-toolbar">
                 <div>
                   <h2 class="inventory-toolbar__title">Inventario</h2>
@@ -696,7 +730,8 @@
               </div>
           </section>
         </div>
-      </main>
+        </main>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -1,4 +1,5 @@
 import './style.css'
+import '@tabler/icons-webfont/dist/tabler-icons.css'
 import type {
   AttendanceFormInput,
   AttendanceInput,
@@ -14,7 +15,7 @@ import type {
   WorkerFormInput,
 } from '@shared/ipc/contracts'
 
-type TabName = 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion'
+type TabName = 'bienvenida' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion'
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
 
@@ -274,7 +275,7 @@ const productOptions = data.products.map((product) => ({
       attendanceForm.elements.namedItem('id_trabajador') as HTMLSelectElement,
       data.references.trabajadores.map((worker) => ({
         id: worker.id_trabajador,
-        nombre: `${worker.nombre_completo}${worker.cargo ? ` - ${worker.cargo}` : ''}`,
+        nombre: `${worker.nombres} ${worker.apellidos}${worker.cargo ? ` - ${worker.cargo}` : ''}`,
       })),
       true,
     )
@@ -835,7 +836,7 @@ function buildInventoryAuditPayload(data: BootstrapData): InventoryAuditInput {
     }),
     observacion: 'Cierre de inventario desde checklist',
   }
-
+}
 
 function renderRolesTable(data: BootstrapData) {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#roles-table tbody')
@@ -1612,6 +1613,12 @@ async function bootstrap() {
 }
 
 function initLogin() {
+  const sidebarToggle = document.getElementById('sidebar-toggle')
+  const sidebar = document.getElementById('main-sidebar')
+  sidebarToggle?.addEventListener('click', () => {
+    sidebar?.classList.toggle('is-collapsed')
+  })
+
   const loginForm = document.querySelector<HTMLFormElement>('#login-form')
   loginForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
@@ -1625,6 +1632,7 @@ function initLogin() {
         currentUser = result.user ?? null
         document.getElementById('login-overlay')!.style.display = 'none'
         document.getElementById('main-app')!.style.display = 'block'
+        setActiveTab('bienvenida')
         void bootstrap()
       } else {
         setStatus('login-status', result.message ?? 'Credenciales incorrectas', 'error')
@@ -1640,6 +1648,7 @@ function initLogin() {
     loginForm?.reset()
     document.getElementById('main-app')!.style.display = 'none'
     document.getElementById('login-overlay')!.style.display = 'flex'
+    sidebar?.classList.remove('is-collapsed')
   })
 }
 
