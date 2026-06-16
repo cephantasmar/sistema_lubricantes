@@ -108,6 +108,25 @@ function seedDatabase(databaseInstance: Database.Database) {
     ) VALUES (?, ?, 'ENTRADA', ?, ?, 'Stock inicial de prueba', ?, ?, 1, ?)
   `)
 
+  const getProductStock = databaseInstance.prepare(`
+    SELECT COALESCE(SUM(
+      CASE
+        WHEN im.tipo_movimiento IN ('ENTRADA', 'AJUSTE_POS', 'DEVOLUCION') THEN im.cantidad
+        WHEN im.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEG', 'VENTA') THEN -im.cantidad
+        ELSE 0
+      END
+    ), 0) AS stock_actual
+    FROM inventario_movimientos im
+    WHERE im.id_producto = ?
+  `)
+
+  const insertStockAdjustment = databaseInstance.prepare(`
+    INSERT INTO inventario_movimientos (
+      id_movimiento, id_producto, tipo_movimiento, cantidad, costo_unitario, motivo,
+      referencia, observacion, realizado_por, fecha_movimiento
+    ) VALUES (?, ?, 'AJUSTE_POS', ?, ?, 'Reposicion de stock demo', ?, ?, 1, ?)
+  `)
+
   databaseInstance.transaction(() => {
     seedStatements.forEach((statement) => {
       databaseInstance.prepare(statement).run()
@@ -129,6 +148,20 @@ function seedDatabase(databaseInstance: Database.Database) {
       )
 
       insertMovement.run(5000 + index + 1, product.id, product.stockInicial, product.costo, referencia, referencia, now)
+
+      const currentStock = Number((getProductStock.get(product.id) as { stock_actual: number } | undefined)?.stock_actual ?? 0)
+      if (currentStock < product.stockInicial) {
+        const missingStock = Number((product.stockInicial - currentStock).toFixed(2))
+        insertStockAdjustment.run(
+          6000 + index + 1,
+          product.id,
+          missingStock,
+          product.costo,
+          `SEED-TOPUP-${product.codigo}`,
+          `Ajuste automatico de stock demo hasta ${product.stockInicial}`,
+          now,
+        )
+      }
     })
   })()
 }
