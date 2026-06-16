@@ -660,12 +660,45 @@ body {
   min-width: 900px;
 }
 
-.cart-quantity {
-  width: 92px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 8px;
-  font: inherit;
+.cart-table {
+  border-collapse: collapse;
+}
+
+.cart-table th,
+.cart-table td {
+  border: 1px solid #cbd5e1;
+  padding: 10px;
+  vertical-align: middle;
+}
+
+.cart-table td:focus-within {
+  outline: 2px solid #16a34a;
+  outline-offset: -2px;
+  position: relative;
+  z-index: 5;
+}
+
+.excel-input {
+  transition: background-color 0.15s ease;
+}
+
+.excel-input:focus {
+  background-color: #f0fdf4 !important;
+}
+
+/* Hide spin buttons for number inputs in the excel grid to look cleaner */
+.excel-input::-webkit-outer-spin-button,
+.excel-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.excel-input {
+  -moz-appearance: textfield;
+}
+
+.empty-excel-row td {
+  height: 45px;
+  background-color: #fafbfc;
 }
 
 .sale-checkout {
@@ -795,6 +828,139 @@ body {
 
   .sale-summary {
     grid-template-columns: 1fr;
+  }
+}
+
+/* --- POS Sales Header & Checkout Groups --- */
+.sale-header-fields {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: var(--surface-alt);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.card-subgroup {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.card-subgroup h3 {
+  margin: 0 0 10px 0;
+  font-size: 0.95rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.payment-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.metric-badge {
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
+.metric-badge span {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.metric-badge strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.1rem;
+}
+
+#sale-paid-output {
+  color: var(--success);
+}
+#sale-pending-output {
+  color: var(--danger);
+}
+#sale-change-output {
+  color: var(--accent);
+}
+
+/* --- Modal Styles --- */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+.modal__content {
+  position: relative;
+  width: 100%;
+  max-width: 750px;
+  max-height: 85vh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  z-index: 1010;
+  animation: modalEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal__header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal__header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--text);
+}
+
+.modal__body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 
@@ -931,3 +1097,260 @@ body {
   cursor: pointer;
   margin: 0;
 }
+
+/* =========================================
+   REPORTS MODULE & SVG CHARTS
+   ========================================= */
+.report-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 20px;
+}
+
+.report-toolbar__title {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text);
+}
+
+.report-toolbar__subtitle {
+  margin: 4px 0 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.report-toolbar__filters {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.report-kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.kpi-card__icon {
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: var(--surface-alt);
+  border-radius: 12px;
+}
+
+.kpi-card__content {
+  display: flex;
+  flex-direction: column;
+}
+
+.kpi-card__label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kpi-card__value {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-top: 4px;
+  color: var(--text);
+}
+
+/* KPI Card Theme Colors via Left Borders */
+.kpi-card--sales { border-left: 5px solid #0284c7; }
+.kpi-card--sales .kpi-card__icon { background: #e0f2fe; }
+.kpi-card--cost { border-left: 5px solid #ea580c; }
+.kpi-card--cost .kpi-card__icon { background: #ffedd5; }
+.kpi-card--profit { border-left: 5px solid #16a34a; }
+.kpi-card--profit .kpi-card__icon { background: #dcfce7; }
+.kpi-card--cash { border-left: 5px solid #7c3aed; }
+.kpi-card--cash .kpi-card__icon { background: #f3e8ff; }
+.kpi-card--pending { border-left: 5px solid #d97706; }
+.kpi-card--pending .kpi-card__icon { background: #fef3c7; }
+
+/* Main Grid Layout */
+.report-main-layout {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 24px;
+}
+
+.report-tables-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Secondary Tab Controls */
+.report-subtabs {
+  display: flex;
+  border-bottom: 2px solid var(--border);
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.report-subtab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.report-subtab-btn:hover {
+  color: var(--text);
+}
+
+.report-subtab-btn.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Panels */
+.report-table-panel {
+  display: none;
+}
+
+.report-table-panel.is-active {
+  display: block;
+}
+
+/* Charts Grid */
+.report-charts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chart-card {
+  padding: 16px;
+}
+
+.chart-container {
+  min-height: 220px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-top: 12px;
+  overflow: visible;
+}
+
+/* SVG Chart Elements */
+.chart-svg {
+  width: 100%;
+  height: 100%;
+  min-height: 190px;
+}
+
+.chart-axis-line {
+  stroke: var(--border);
+  stroke-width: 1px;
+}
+
+.chart-grid-line {
+  stroke: #e2e8f0;
+  stroke-dasharray: 4,4;
+  stroke-width: 1px;
+}
+
+.chart-text {
+  font-family: inherit;
+  font-size: 0.72rem;
+  fill: var(--muted);
+}
+
+.chart-text--title {
+  font-weight: 700;
+  fill: var(--text);
+}
+
+.chart-bar {
+  transition: fill-opacity 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.chart-bar:hover {
+  fill-opacity: 0.85;
+}
+
+.chart-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-area {
+  opacity: 0.15;
+}
+
+.chart-dot {
+  cursor: pointer;
+  transition: r 0.2s ease, fill 0.2s ease;
+}
+
+.chart-dot:hover {
+  r: 7px;
+}
+
+/* Premium Dynamic HTML Tooltip inside chart */
+.chart-tooltip-el {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.95);
+  color: #ffffff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transform: translate(-50%, -100%);
+  margin-top: -12px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+@media (max-width: 1100px) {
+  .report-main-layout {
+    grid-template-columns: 1fr;
+  }
+}
+

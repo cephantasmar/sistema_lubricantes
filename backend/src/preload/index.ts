@@ -8,10 +8,14 @@ import type {
   MovementFormInput,
   ProductFormInput,
   SaleFormInput,
+  SaleFullDetail,
   AuthInput,
   AuthResult,
   RoleFormInput,
-  WorkerFormInput
+  WorkerFormInput,
+  AttendanceInput,
+  SalesReportInput,
+  SalesReportData
 } from '../shared/ipc/contracts'
 
 contextBridge.exposeInMainWorld('inventoryApi', {
@@ -24,6 +28,8 @@ contextBridge.exposeInMainWorld('inventoryApi', {
   closeInventory: (payload: InventoryAuditInput) =>
     ipcRenderer.invoke('inventory:close-inventory', payload) as Promise<InventoryAuditResult>,
   createSale: (payload: SaleFormInput) => ipcRenderer.invoke('sales:create-sale', payload) as Promise<{ saleId: number }>,
+  getSaleDetail: (saleId: number) => ipcRenderer.invoke('sales:get-sale-detail', saleId) as Promise<SaleFullDetail>,
+  getSalesReport: (payload: SalesReportInput) => ipcRenderer.invoke('sales:get-sales-report', payload) as Promise<SalesReportData>,
   registerAttendanceEntry: (payload: AttendanceFormInput) =>
     ipcRenderer.invoke('attendance:register-entry', payload) as Promise<{ attendanceId: number }>,
   registerAttendanceExit: (payload: AttendanceFormInput) =>
@@ -33,4 +39,5 @@ contextBridge.exposeInMainWorld('inventoryApi', {
   login: (payload: AuthInput) => ipcRenderer.invoke('auth:login', payload) as Promise<AuthResult>,
   saveRole: (payload: RoleFormInput) => ipcRenderer.invoke('admin:save-role', payload) as Promise<{ roleId: number }>,
   saveWorker: (payload: WorkerFormInput) => ipcRenderer.invoke('admin:save-worker', payload) as Promise<{ workerId: number }>,
+  recordAttendance: (payload: AttendanceInput) => ipcRenderer.invoke('shifts:record-attendance', payload) as Promise<{ attendanceId: number }>,
 })
