@@ -8,11 +8,14 @@ import type {
   MovementFormInput,
   ProductFormInput,
   SaleFormInput,
+  SaleFullDetail,
   AuthInput,
   AuthResult,
   RoleFormInput,
   WorkerFormInput,
-  AttendanceInput
+  AttendanceInput,
+  SalesReportInput,
+  SalesReportData
 } from '../shared/ipc/contracts'
 
 contextBridge.exposeInMainWorld('inventoryApi', {
@@ -25,6 +28,8 @@ contextBridge.exposeInMainWorld('inventoryApi', {
   closeInventory: (payload: InventoryAuditInput) =>
     ipcRenderer.invoke('inventory:close-inventory', payload) as Promise<InventoryAuditResult>,
   createSale: (payload: SaleFormInput) => ipcRenderer.invoke('sales:create-sale', payload) as Promise<{ saleId: number }>,
+  getSaleDetail: (saleId: number) => ipcRenderer.invoke('sales:get-sale-detail', saleId) as Promise<SaleFullDetail>,
+  getSalesReport: (payload: SalesReportInput) => ipcRenderer.invoke('sales:get-sales-report', payload) as Promise<SalesReportData>,
   registerAttendanceEntry: (payload: AttendanceFormInput) =>
     ipcRenderer.invoke('attendance:register-entry', payload) as Promise<{ attendanceId: number }>,
   registerAttendanceExit: (payload: AttendanceFormInput) =>

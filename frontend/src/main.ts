@@ -2,7 +2,6 @@ import './style.css'
 import '@tabler/icons-webfont/dist/tabler-icons.css'
 import type {
   AttendanceFormInput,
-  AttendanceInput,
   AuthInput,
   AuthResult,
   BootstrapData,
@@ -12,10 +11,17 @@ import type {
   ProductRow,
   RoleFormInput,
   SaleFormInput,
+  SaleFullDetail,
   WorkerFormInput,
+  SalesReportInput,
+  SalesReportData,
 } from '@shared/ipc/contracts'
 
+<<<<<<< HEAD
 type TabName = 'bienvenida' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion'
+=======
+type TabName = 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion' | 'reportes'
+>>>>>>> origin/SPRINT2
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
 
@@ -39,8 +45,19 @@ type WorkerFormState = { id_trabajador: number | null }
 const workerFormState: WorkerFormState = { id_trabajador: null }
 
 let bootstrapData: BootstrapData | null = null
-let currentUser: { id_usuario: number; username: string; id_trabajador: number | null; nombres: string | null } | null = null
-const saleCart = new Map<number, { product: ProductRow; cantidad: number }>()
+let currentUser: NonNullable<AuthResult['user']> | null = null
+const saleCart = new Map<number, { product: ProductRow; cantidad: number; descuento_unitario: number }>()
+
+type LocalPayment = {
+  id_metodo_pago: number
+  metodo_nombre: string
+  id_moneda: number
+  moneda_codigo: string
+  monto: number
+  referencia_pago: string | null
+}
+
+const salePayments: LocalPayment[] = []
 let inventoryAuditMode = false
 let inventoryAuditRows: InventoryAuditRowState[] = []
 let appInfoSnapshot: { appName: string; version: string; databasePath: string } | null = null
@@ -48,16 +65,53 @@ let inventorySearchTerm = ''
 let inventorySearchField: InventorySearchField = 'all'
 let inventoryAuditSearchTerm = ''
 
+function hasPermission(permissionName: string) {
+  return Boolean(currentUser?.isAdminLike || currentUser?.permissionNames.includes(permissionName))
+}
+
+function hasAnyPermission(permissionNames: string[]) {
+  return permissionNames.some((permissionName) => hasPermission(permissionName))
+}
+
+function canAccessTab(tabName: TabName) {
+  const accessByTab: Record<TabName, boolean> = {
+    inventario: hasAnyPermission(['VER_INVENTARIO', 'GESTIONAR_INVENTARIO']),
+    movimientos: hasAnyPermission(['VER_MOVIMIENTOS', 'REGISTRAR_MOVIMIENTOS']),
+    ventas: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
+    turnos: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
+    asistencias: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
+    administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES']),
+    reportes: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
+  }
+
+  return accessByTab[tabName]
+}
+
+function getFirstAccessibleTab(): TabName {
+  return (['inventario', 'movimientos', 'ventas', 'turnos', 'asistencias', 'administracion', 'reportes'] as TabName[]).find(canAccessTab) ?? 'inventario'
+}
+
 
 function setActiveTab(tabName: TabName) {
+  const nextTab = canAccessTab(tabName) ? tabName : getFirstAccessibleTab()
+
   document.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => {
-    const isActive = button.dataset.tab === tabName
+    const isActive = button.dataset.tab === nextTab
     button.classList.toggle('is-active', isActive)
     button.setAttribute('aria-selected', String(isActive))
   })
   document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
-    panel.classList.toggle('is-active', panel.dataset.panel === tabName)
+    panel.classList.toggle('is-active', panel.dataset.panel === nextTab)
   })
+
+  if (tabName === 'ventas') {
+    setTimeout(() => {
+      document.querySelector<HTMLInputElement>('#sale-product-search')?.focus()
+    }, 50)
+  } else if (tabName === 'reportes') {
+    initReportDates()
+    void loadSalesReportData()
+  }
 }
 
 function escapeHtml(value: string | number | null | undefined) {
@@ -210,17 +264,7 @@ if (!container) {
   if (navUserName) navUserName.textContent = currentUser?.nombres || currentUser?.username || 'Usuario'
 
   if (navUserRole) {
-    let roleName = 'Administrador'
-    if (currentUser?.id_trabajador) {
-      const worker = data.workers.find(w => w.id_trabajador === currentUser?.id_trabajador)
-      if (worker && worker.id_rol) {
-        const role = data.roles.find(r => r.id_rol === worker.id_rol)
-        if (role) roleName = role.nombre
-      } else {
-        roleName = 'Sin rol asignado'
-      }
-    }
-    navUserRole.textContent = roleName
+    navUserRole.textContent = currentUser?.roleNames.length ? currentUser.roleNames.join(', ') : 'Sin rol asignado'
   }
 
 }
@@ -235,6 +279,59 @@ function renderSelectOptions(select: HTMLSelectElement | null, options: Array<{ 
     ...options.map((option) => `<option value="${option.id}">${escapeHtml(option.nombre)}</option>`),
   ]
   select.innerHTML = items.join('')
+}
+
+function setClosestCardHidden(selector: string, hidden: boolean) {
+  document.querySelector<HTMLElement>(selector)?.closest<HTMLElement>('.module-card')?.toggleAttribute('hidden', hidden)
+}
+
+function applyAccessControl() {
+  const accessByTab: Record<TabName, boolean> = {
+    inventario: canAccessTab('inventario'),
+    movimientos: canAccessTab('movimientos'),
+    ventas: canAccessTab('ventas'),
+    turnos: canAccessTab('turnos'),
+    administracion: canAccessTab('administracion'),
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
+    const tabName = button.dataset.tab as TabName | undefined
+    const allowed = tabName ? accessByTab[tabName] : false
+    button.hidden = !allowed
+    button.disabled = !allowed
+  })
+
+  document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
+    const tabName = panel.dataset.panel as TabName | undefined
+    const allowed = tabName ? accessByTab[tabName] : false
+    panel.hidden = !allowed
+    if (!allowed) {
+      panel.classList.remove('is-active')
+    }
+  })
+
+  setClosestCardHidden('#product-form', !hasPermission('GESTIONAR_INVENTARIO'))
+  document.querySelector<HTMLButtonElement>('#inventory-mode-toggle')?.toggleAttribute('hidden', !hasPermission('GESTIONAR_INVENTARIO'))
+  if (!hasPermission('GESTIONAR_INVENTARIO') && inventoryAuditMode) {
+    setInventoryAuditMode(false)
+  }
+
+  setClosestCardHidden('#movement-form', !hasPermission('REGISTRAR_MOVIMIENTOS'))
+  setClosestCardHidden('#sale-form', !hasPermission('REGISTRAR_VENTAS'))
+  const canManageAttendancePanel = Boolean(currentUser?.isAdminLike)
+  setClosestCardHidden('#attendance-form', !hasPermission('REGISTRAR_ASISTENCIAS'))
+  setClosestCardHidden('#attendance-table', !canManageAttendancePanel)
+  setClosestCardHidden('#work-hours-table', !canManageAttendancePanel)
+  setClosestCardHidden('#shift-rotation-table', !canManageAttendancePanel)
+  setClosestCardHidden('#shift-history-table', !canAccessTab('turnos'))
+  setClosestCardHidden('#role-form', !hasPermission('GESTIONAR_ROLES'))
+  setClosestCardHidden('#worker-form', !hasPermission('GESTIONAR_TRABAJADORES'))
+  setClosestCardHidden('#audit-table', !Boolean(currentUser?.isAdminLike))
+
+  const activeTab = document.querySelector<HTMLElement>('[data-tab].is-active')?.dataset.tab as TabName | undefined
+  if (!activeTab || !canAccessTab(activeTab)) {
+    setActiveTab(getFirstAccessibleTab())
+  }
 }
 
 function renderProductFormOptions(data: BootstrapData) {
@@ -262,23 +359,81 @@ const productOptions = data.products.map((product) => ({
   }
   if (saleForm) {
     renderSelectOptions(
-      saleForm.elements.namedItem('id_producto') as HTMLSelectElement,
-      productOptions,
+      saleForm.elements.namedItem('id_cliente') as HTMLSelectElement,
+      [
+        { id: 0, nombre: 'Consumidor final' },
+        ...data.references.clientes
+      ],
+      false
+    )
+    
+    const trabajadoresMapped = data.references.trabajadores.map((worker) => ({
+      id: worker.id_trabajador,
+      nombre: worker.nombre_completo ?? `${worker.nombres} ${worker.apellidos}`,
+    }))
+
+    renderSelectOptions(saleForm.elements.namedItem('id_vendedor') as HTMLSelectElement, trabajadoresMapped, false)
+    renderSelectOptions(
+<<<<<<< HEAD
+      attendanceForm.elements.namedItem('id_trabajador') as HTMLSelectElement,
+      data.references.trabajadores.map((worker) => ({
+        id: worker.id_trabajador,
+        nombre: `${worker.nombres} ${worker.apellidos}${worker.cargo ? ` - ${worker.cargo}` : ''}`,
+=======
+      saleForm.elements.namedItem('id_turno') as HTMLSelectElement,
+      data.references.turnos.map((shift) => ({
+        id: shift.id_turno,
+        nombre: `${shift.nombre} (${shift.hora_inicio} - ${shift.hora_fin})`,
+>>>>>>> origin/SPRINT2
+      })),
       true,
     )
-    renderSelectOptions(saleForm.elements.namedItem('id_metodo_pago') as HTMLSelectElement, data.references.metodosPago, true)
-    renderSelectOptions(saleForm.elements.namedItem('id_moneda') as HTMLSelectElement, data.references.monedas, true)
+    renderSelectOptions(saleForm.elements.namedItem('id_moneda') as HTMLSelectElement, data.references.monedas, false)
+
+    const methodSelect = document.querySelector<HTMLSelectElement>('#payment-method-select')
+    if (methodSelect) {
+      renderSelectOptions(methodSelect, data.references.metodosPago, false)
+    }
+    const currencySelect = document.querySelector<HTMLSelectElement>('#payment-currency-select')
+    if (currencySelect) {
+      renderSelectOptions(currencySelect, data.references.monedas, false)
+      currencySelect.value = '1'
+    }
+
+    // Set default values for sale fields
+    const clienteSelect = saleForm.elements.namedItem('id_cliente') as HTMLSelectElement
+    if (clienteSelect) {
+      clienteSelect.value = '0'
+    }
+    const vendedorSelect = saleForm.elements.namedItem('id_vendedor') as HTMLSelectElement
+    if (vendedorSelect) {
+      const preferredWorkerId = currentUser?.id_trabajador ?? data.references.trabajadores[0]?.id_trabajador
+      vendedorSelect.value = preferredWorkerId ? String(preferredWorkerId) : ''
+    }
+    const monedaSelect = saleForm.elements.namedItem('id_moneda') as HTMLSelectElement
+    if (monedaSelect) {
+      monedaSelect.value = '1'
+    }
+    updateSaleCurrencyRate()
+    updateSaleShift()
   }
 
   if (attendanceForm) {
+    const workerSelect = attendanceForm.elements.namedItem('id_trabajador') as HTMLSelectElement
     renderSelectOptions(
-      attendanceForm.elements.namedItem('id_trabajador') as HTMLSelectElement,
+      workerSelect,
       data.references.trabajadores.map((worker) => ({
         id: worker.id_trabajador,
         nombre: `${worker.nombres} ${worker.apellidos}${worker.cargo ? ` - ${worker.cargo}` : ''}`,
       })),
       true,
     )
+    if (!currentUser?.isAdminLike && currentUser?.id_trabajador) {
+      workerSelect.value = String(currentUser.id_trabajador)
+      workerSelect.disabled = true
+    } else {
+      workerSelect.disabled = false
+    }
     renderSelectOptions(
       attendanceForm.elements.namedItem('id_turno') as HTMLSelectElement,
       data.references.turnos.map((shift) => ({
@@ -362,7 +517,7 @@ function renderProductsTable(data: BootstrapData) {
           <td><span class="badge ${product.estado ? 'badge--success' : 'badge--muted'}">${product.estado ? 'Activo' : 'Inactivo'}</span></td>
           <td>
             <div class="row-actions">
-              <button class="button button--small" type="button" data-product-edit="${product.id_producto}">Editar</button>
+              ${hasPermission('GESTIONAR_INVENTARIO') ? `<button class="button button--small" type="button" data-product-edit="${product.id_producto}">Editar</button>` : ''}
             </div>
           </td>
         </tr>
@@ -426,7 +581,7 @@ function renderSalesTable(data: BootstrapData) {
   }
 
   if (data.sales.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">Todavía no hay ventas registradas.</td></tr>'
+    tableBody.innerHTML = '<tr><td colspan="8" class="empty-state">Todavía no hay ventas registradas.</td></tr>'
     return
   }
 
@@ -443,10 +598,20 @@ function renderSalesTable(data: BootstrapData) {
 
           <td>${escapeHtml(sale.metodo_pago)} · ${escapeHtml(sale.moneda)}</td>
           <td><span class="badge badge--soft">${escapeHtml(sale.estado)}</span></td>
+          <td>
+            <button class="button button--small button--primary" type="button" data-sale-detail-btn="${sale.id_venta}">Ver</button>
+          </td>
         </tr>
       `,
     )
     .join('')
+
+  tableBody.querySelectorAll<HTMLButtonElement>('[data-sale-detail-btn]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const saleId = Number(btn.dataset.saleDetailBtn)
+      await openSaleDetailModal(saleId)
+    })
+  })
 }
 
 function renderAttendanceState(data: BootstrapData) {
@@ -522,11 +687,11 @@ function renderAttendanceTable(data: BootstrapData) {
   }
 
   if (count) {
-    count.textContent = `${data.attendances.length} registros`
+    count.textContent = `${data.attendances.length} hoy`
   }
 
   if (data.attendances.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">Todavia no hay entradas o salidas registradas.</td></tr>'
+    tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">Todavia no hay entradas o salidas registradas hoy.</td></tr>'
     return
   }
 
@@ -577,6 +742,69 @@ function renderWorkHoursTable(data: BootstrapData) {
         </tr>
       `
     })
+    .join('')
+}
+
+function renderShiftRotationTable(data: BootstrapData) {
+  const tableBody = document.querySelector<HTMLTableSectionElement>('#shift-rotation-table tbody')
+
+  if (!tableBody) {
+    return
+  }
+
+  if (data.shiftRotationSummary.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">Todavia no hay rotacion de turnos registrada.</td></tr>'
+    return
+  }
+
+  tableBody.innerHTML = data.shiftRotationSummary
+    .map(
+      (summary) => `
+        <tr>
+          <td><strong>${escapeHtml(summary.trabajador_nombre)}</strong></td>
+          <td>${escapeHtml(summary.cargo ?? 'Sin cargo')}</td>
+          <td>${escapeHtml(summary.turnos_manana)}</td>
+          <td>${escapeHtml(summary.turnos_tarde)}</td>
+          <td>${escapeHtml(summary.turnos_noche)}</td>
+          <td><strong>${escapeHtml(summary.total_turnos)}</strong></td>
+          <td>
+            <strong>${escapeHtml(summary.ultimo_turno ?? 'Sin turno')}</strong>
+            <small>${escapeHtml(summary.ultima_fecha ?? 'Sin fecha')}</small>
+          </td>
+        </tr>
+      `,
+    )
+    .join('')
+}
+
+function renderShiftHistoryTable(data: BootstrapData) {
+  const tableBody = document.querySelector<HTMLTableSectionElement>('#shift-history-table tbody')
+
+  if (!tableBody) {
+    return
+  }
+
+  if (data.shiftHistory.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">Todavia no hay historial de turnos registrado.</td></tr>'
+    return
+  }
+
+  tableBody.innerHTML = data.shiftHistory
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.fecha)}</td>
+          <td>
+            <strong>${escapeHtml(item.trabajador_nombre)}</strong>
+            <small>${escapeHtml(item.cargo ?? 'Sin cargo')}</small>
+          </td>
+          <td><span class="badge badge--soft">${escapeHtml(item.turno_nombre)}</span></td>
+          <td>${escapeHtml(formatTime(item.hora_entrada))}</td>
+          <td>${escapeHtml(formatTime(item.hora_salida))}</td>
+          <td><span class="badge ${item.estado === 'EN_TURNO' ? 'badge--success' : 'badge--muted'}">${item.estado === 'EN_TURNO' ? 'En turno' : 'Completado'}</span></td>
+        </tr>
+      `,
+    )
     .join('')
 }
 
@@ -837,6 +1065,11 @@ function buildInventoryAuditPayload(data: BootstrapData): InventoryAuditInput {
     observacion: 'Cierre de inventario desde checklist',
   }
 }
+<<<<<<< HEAD
+=======
+
+}
+>>>>>>> origin/SPRINT2
 
 function renderRolesTable(data: BootstrapData) {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#roles-table tbody')
@@ -851,7 +1084,7 @@ function renderRolesTable(data: BootstrapData) {
       <td>${escapeHtml(role.descripcion ?? 'Sin descripción')}</td>
       <td><span class="badge ${role.estado ? 'badge--success' : 'badge--muted'}">${role.estado ? 'Activo' : 'Inactivo'}</span></td>
       <td>
-        <button class="button button--small" type="button" data-role-edit="${role.id_rol}">Editar</button>
+        ${hasPermission('GESTIONAR_ROLES') ? `<button class="button button--small" type="button" data-role-edit="${role.id_rol}">Editar</button>` : ''}
       </td>
     </tr>
   `).join('')
@@ -881,7 +1114,7 @@ function renderWorkersTable(data: BootstrapData) {
       <td>${worker.id_usuario ? '<span class="badge badge--soft">Asignado</span>' : '<span class="badge badge--muted">Sin usuario</span>'}</td>
       <td><span class="badge ${worker.estado === 'activo' ? 'badge--success' : 'badge--muted'}">${escapeHtml(worker.estado)}</span></td>
       <td>
-        <button class="button button--small" type="button" data-worker-edit="${worker.id_trabajador}">Editar</button>
+        ${hasPermission('GESTIONAR_TRABAJADORES') ? `<button class="button button--small" type="button" data-worker-edit="${worker.id_trabajador}">Editar</button>` : ''}
       </td>
     </tr>
   `).join('')
@@ -964,6 +1197,11 @@ function renderProductSearchResults(query = '') {
   container.querySelectorAll<HTMLButtonElement>('[data-sale-product]').forEach((button) => {
     button.addEventListener('click', () => {
       addProductToCart(Number(button.dataset.saleProduct))
+      const searchInput = document.querySelector<HTMLInputElement>('#sale-product-search')
+      if (searchInput) {
+        searchInput.value = ''
+      }
+      renderProductSearchResults('')
     })
   })
 }
@@ -994,7 +1232,7 @@ function addProductToCart(productId: number) {
     return
   }
 
-  saleCart.set(productId, { product, cantidad: nextQuantity })
+  saleCart.set(productId, { product, cantidad: nextQuantity, descuento_unitario: current?.descuento_unitario ?? 0 })
   renderSaleCart()
   setStatus('sale-status', `${product.nombre} agregado al carrito.`, 'success')
 }
@@ -1022,47 +1260,304 @@ function updateCartQuantity(productId: number, quantity: number) {
   renderSaleCart()
 }
 
+function updateCartDiscount(productId: number, discountUnit: number) {
+  const item = saleCart.get(productId)
+
+  if (!item) {
+    return
+  }
+
+  if (!Number.isFinite(discountUnit) || discountUnit < 0) {
+    setStatus('sale-status', 'El descuento unitario no puede ser negativo.', 'error')
+    renderSaleCart()
+    return
+  }
+
+  if (discountUnit > Number(item.product.precio_venta)) {
+    setStatus('sale-status', 'El descuento unitario no puede superar el precio de venta.', 'error')
+    renderSaleCart()
+    return
+  }
+
+  saleCart.set(productId, { ...item, descuento_unitario: roundMoney(discountUnit) })
+  renderSaleCart()
+}
+
+function getLocalCurrencyRate(idMoneda: number): number {
+  if (!bootstrapData) return 1
+  if (idMoneda === 1) return 1
+  const currency = bootstrapData.references.monedas.find(m => m.id === idMoneda)
+  if (!currency || currency.nombre.startsWith('BOB')) return 1
+
+  const rateObj = bootstrapData.references.tiposCambio.find(r => r.id_moneda === idMoneda)
+  return rateObj ? Number(rateObj.valor) : 1
+}
+
+function updateSaleCurrencyRate() {
+  if (!bootstrapData) return
+  const saleForm = document.querySelector<HTMLFormElement>('#sale-form')
+  if (!saleForm) return
+  const idMoneda = Number((saleForm.elements.namedItem('id_moneda') as HTMLSelectElement).value)
+  const rateInput = saleForm.elements.namedItem('tasa_cambio_aplicada') as HTMLInputElement
+  if (!rateInput) return
+
+  const rate = getLocalCurrencyRate(idMoneda)
+  rateInput.value = rate.toFixed(4)
+  renderSaleCart()
+}
+
+function updateSaleShift() {
+  if (!bootstrapData) return
+  const saleForm = document.querySelector<HTMLFormElement>('#sale-form')
+  if (!saleForm) return
+  const vendedorSelect = saleForm.elements.namedItem('id_vendedor') as HTMLSelectElement
+  const shiftSelect = saleForm.elements.namedItem('id_turno') as HTMLSelectElement
+  if (!vendedorSelect || !shiftSelect) return
+
+  const workerId = Number(vendedorSelect.value)
+  if (!workerId) {
+    shiftSelect.value = ''
+    return
+  }
+
+  const activeAttendance = bootstrapData.attendances.find(
+    (att) => att.id_trabajador === workerId && att.estado === 'EN_TURNO'
+  )
+
+  if (activeAttendance) {
+    shiftSelect.value = String(activeAttendance.id_turno)
+  } else {
+    shiftSelect.value = ''
+  }
+}
+
+function renderSalePayments() {
+  const tableBody = document.querySelector<HTMLTableSectionElement>('#sale-payments-table tbody')
+  if (!tableBody) return
+
+  if (salePayments.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No se han registrado pagos.</td></tr>'
+    return
+  }
+
+  tableBody.innerHTML = salePayments
+    .map((pago, index) => {
+      return `
+        <tr>
+          <td><strong>${escapeHtml(pago.metodo_nombre)}</strong></td>
+          <td>${escapeHtml(pago.moneda_codigo)}</td>
+          <td>${escapeHtml(formatCurrency(pago.monto))}</td>
+          <td>${escapeHtml(pago.referencia_pago || '-')}</td>
+          <td>
+            <button class="button button--small" type="button" data-payment-remove="${index}">Eliminar</button>
+          </td>
+        </tr>
+      `
+    })
+    .join('')
+
+  tableBody.querySelectorAll<HTMLButtonElement>('[data-payment-remove]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const idx = Number(button.dataset.paymentRemove)
+      salePayments.splice(idx, 1)
+      renderSalePayments()
+      renderSaleCart()
+    })
+  })
+}
+
+function setupPaymentHandlers() {
+  const addBtn = document.querySelector<HTMLButtonElement>('#payment-add-btn')
+  if (!addBtn) return
+
+  addBtn.addEventListener('click', () => {
+    if (!bootstrapData) return
+    const methodSelect = document.querySelector<HTMLSelectElement>('#payment-method-select')
+    const currencySelect = document.querySelector<HTMLSelectElement>('#payment-currency-select')
+    const amountInput = document.querySelector<HTMLInputElement>('#payment-amount-input')
+    const refInput = document.querySelector<HTMLInputElement>('#payment-ref-input')
+
+    if (!methodSelect || !currencySelect || !amountInput || !refInput) return
+
+    const idMetodo = Number(methodSelect.value)
+    const idMoneda = Number(currencySelect.value)
+    const monto = Number(amountInput.value)
+    const referencia = refInput.value.trim() || null
+
+    if (!idMetodo || !idMoneda) {
+      setStatus('sale-status', 'Seleccione método de pago y moneda.', 'error')
+      return
+    }
+
+    if (!Number.isFinite(monto) || monto <= 0) {
+      setStatus('sale-status', 'El monto de pago debe ser mayor que cero.', 'error')
+      return
+    }
+
+    const methodObj = bootstrapData.references.metodosPago.find(m => m.id === idMetodo)
+    const currencyObj = bootstrapData.references.monedas.find(c => c.id === idMoneda)
+
+    if (!methodObj || !currencyObj) return
+
+    salePayments.push({
+      id_metodo_pago: idMetodo,
+      metodo_nombre: methodObj.nombre,
+      id_moneda: idMoneda,
+      moneda_codigo: currencyObj.nombre.split(' - ')[0],
+      monto: roundMoney(monto),
+      referencia_pago: referencia
+    })
+
+    amountInput.value = ''
+    refInput.value = ''
+
+    renderSalePayments()
+    renderSaleCart()
+    setStatus('sale-status', 'Pago agregado.', 'success')
+  })
+}
+
 function renderSaleCart() {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#sale-cart-table tbody')
   const discountInput = document.querySelector<HTMLInputElement>('#sale-form input[name="descuento_total"]')
+  const saleForm = document.querySelector<HTMLFormElement>('#sale-form')
+  if (!saleForm) return
+
+  const saleCurrencySelect = saleForm.elements.namedItem('id_moneda') as HTMLSelectElement
+  const idMonedaSale = Number(saleCurrencySelect?.value ?? 1)
+  const saleCurrencyObj = bootstrapData?.references.monedas.find(m => m.id === idMonedaSale)
+  const saleCurrencyCode = saleCurrencyObj ? saleCurrencyObj.nombre.split(' - ')[0] : 'BOB'
+
   const subtotal = getSaleSubtotal()
-  const discount = roundMoney(Number(discountInput?.value ?? 0))
-  const validDiscount = Number.isFinite(discount) && discount >= 0 ? Math.min(discount, subtotal) : 0
-  const total = roundMoney(subtotal - validDiscount)
+  const discountManual = roundMoney(Number(discountInput?.value ?? 0))
+  const discountLines = roundMoney(
+    Array.from(saleCart.values()).reduce((sum, item) => sum + (item.descuento_unitario ?? 0) * item.cantidad, 0)
+  )
+
+  const discountTotal = roundMoney(discountLines + discountManual)
+  const validDiscountTotal = Number.isFinite(discountTotal) && discountTotal >= 0 ? Math.min(discountTotal, subtotal) : 0
+  const total = roundMoney(subtotal - validDiscountTotal)
+
+  // Track focused element before rendering
+  let activeElementInfo: { productId: number; field: 'quantity' | 'discount'; selectionStart: number | null; selectionEnd: number | null } | null = null
+  const activeEl = document.activeElement as HTMLInputElement | null
+  if (activeEl && (activeEl.classList.contains('cart-quantity') || activeEl.classList.contains('cart-discount'))) {
+    const isQty = activeEl.classList.contains('cart-quantity')
+    const productId = Number(activeEl.dataset.cartQuantity ?? activeEl.dataset.cartDiscount)
+    activeElementInfo = {
+      productId,
+      field: isQty ? 'quantity' : 'discount',
+      selectionStart: activeEl.selectionStart,
+      selectionEnd: activeEl.selectionEnd
+    }
+  }
 
   if (tableBody) {
-    if (saleCart.size === 0) {
-      tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">Agrega productos para iniciar la venta.</td></tr>'
-    } else {
-      tableBody.innerHTML = Array.from(saleCart.values())
-        .map((item) => {
-          const subtotalLine = roundMoney(Number(item.product.precio_venta) * item.cantidad)
+    const cartItems = Array.from(saleCart.values())
+    const minRows = 5
+    const rowsToRender: string[] = []
 
-          return `
-            <tr>
-              <td>
-                <strong>${escapeHtml(item.product.nombre)}</strong>
-                <small>${escapeHtml(item.product.codigo)} · ${escapeHtml(item.product.marca_nombre)}</small>
-              </td>
-              <td>${escapeHtml(formatCurrency(Number(item.product.stock_actual)))}</td>
-              <td>
-                <input class="cart-quantity" type="number" step="0.01" min="0.01" max="${escapeHtml(
-                  item.product.stock_actual,
-                )}" value="${escapeHtml(item.cantidad)}" data-cart-quantity="${item.product.id_producto}" />
-              </td>
-              <td>${escapeHtml(formatCurrency(Number(item.product.precio_venta)))}</td>
-              <td>${escapeHtml(formatCurrency(subtotalLine))}</td>
-              <td>${escapeHtml(formatCurrency(subtotalLine))}</td>
-              <td><button class="button button--small" type="button" data-cart-remove="${item.product.id_producto}">Eliminar</button></td>
-            </tr>
-          `
-        })
-        .join('')
+    cartItems.forEach((item, index) => {
+      const subtotalLine = roundMoney(Number(item.product.precio_venta) * item.cantidad)
+      const discountLine = roundMoney((item.descuento_unitario ?? 0) * item.cantidad)
+      const totalLine = roundMoney(subtotalLine - discountLine)
+
+      rowsToRender.push(`
+        <tr>
+          <td class="excel-row-num" style="text-align: center; font-weight: bold; background: #f1f5f9; color: #64748b; vertical-align: middle;">${index + 1}</td>
+          <td>
+            <strong>${escapeHtml(item.product.nombre)}</strong>
+            <small>${escapeHtml(item.product.codigo)} · ${escapeHtml(item.product.marca_nombre)}</small>
+          </td>
+          <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(Number(item.product.stock_actual)))}</td>
+          <td class="excel-cell-input" style="padding: 0; vertical-align: middle;">
+            <input class="cart-quantity excel-input" type="number" step="0.01" min="0.01" max="${escapeHtml(
+              item.product.stock_actual,
+            )}" value="${escapeHtml(item.cantidad)}" data-cart-quantity="${item.product.id_producto}" style="text-align: right; width: 100%; height: 100%; border: none; padding: 11px; background: transparent; outline: none;" />
+          </td>
+          <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(Number(item.product.precio_venta)))}</td>
+          <td class="excel-cell-input" style="padding: 0; vertical-align: middle;">
+            <input class="cart-discount excel-input" type="number" step="0.01" min="0" max="${escapeHtml(
+              item.product.precio_venta,
+            )}" value="${escapeHtml(item.descuento_unitario ?? 0)}" data-cart-discount="${item.product.id_producto}" style="text-align: right; width: 100%; height: 100%; border: none; padding: 11px; background: transparent; outline: none;" />
+          </td>
+          <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(subtotalLine))}</td>
+          <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(totalLine))}</td>
+          <td style="text-align: center; vertical-align: middle;"><button class="button button--small" type="button" data-cart-remove="${item.product.id_producto}">Eliminar</button></td>
+        </tr>
+      `)
+    })
+
+    // Fill with empty rows
+    for (let i = cartItems.length; i < minRows; i++) {
+      rowsToRender.push(`
+        <tr class="empty-excel-row">
+          <td class="excel-row-num" style="text-align: center; font-weight: bold; background: #f1f5f9; color: #64748b; vertical-align: middle;">${i + 1}</td>
+          <td>&nbsp;</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      `)
     }
 
+    tableBody.innerHTML = rowsToRender.join('')
+
+    // Set change and keyboard navigation events
     tableBody.querySelectorAll<HTMLInputElement>('[data-cart-quantity]').forEach((input) => {
       input.addEventListener('change', () => {
         updateCartQuantity(Number(input.dataset.cartQuantity), Number(input.value))
+      })
+    })
+
+    tableBody.querySelectorAll<HTMLInputElement>('[data-cart-discount]').forEach((input) => {
+      input.addEventListener('change', () => {
+        updateCartDiscount(Number(input.dataset.cartDiscount), Number(input.value))
+      })
+    })
+
+    // Auto-select text on focus and handle key navigation
+    tableBody.querySelectorAll<HTMLInputElement>('.cart-quantity, .cart-discount').forEach((input) => {
+      input.addEventListener('focus', () => {
+        input.select()
+      })
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault()
+          const isQty = input.classList.contains('cart-quantity')
+          const selector = isQty ? '.cart-quantity' : '.cart-discount'
+          const allInputs = Array.from(tableBody.querySelectorAll<HTMLInputElement>(selector))
+          const currentIndex = allInputs.indexOf(input)
+
+          let nextIndex = currentIndex
+          if (e.key === 'ArrowDown') {
+            nextIndex = currentIndex + 1
+          } else if (e.key === 'ArrowUp') {
+            nextIndex = currentIndex - 1
+          }
+
+          if (nextIndex >= 0 && nextIndex < allInputs.length) {
+            allInputs[nextIndex].focus()
+          }
+        } else if (e.key === 'Enter') {
+          e.preventDefault()
+          input.blur() // Trigger changes
+          const isQty = input.classList.contains('cart-quantity')
+          const selector = isQty ? '.cart-quantity' : '.cart-discount'
+          const allInputs = Array.from(tableBody.querySelectorAll<HTMLInputElement>(selector))
+          const currentIndex = allInputs.indexOf(input)
+
+          if (currentIndex + 1 < allInputs.length) {
+            allInputs[currentIndex + 1].focus()
+          } else {
+            document.querySelector<HTMLInputElement>('#sale-product-search')?.focus()
+          }
+        }
       })
     })
 
@@ -1072,6 +1567,36 @@ function renderSaleCart() {
         renderSaleCart()
       })
     })
+
+    // Restore focus if applicable
+    if (activeElementInfo) {
+      const selector = activeElementInfo.field === 'quantity'
+        ? `input[data-cart-quantity="${activeElementInfo.productId}"]`
+        : `input[data-cart-discount="${activeElementInfo.productId}"]`
+      const nextActive = tableBody.querySelector<HTMLInputElement>(selector)
+      if (nextActive) {
+        nextActive.focus()
+        if (activeElementInfo.selectionStart !== null && activeElementInfo.selectionEnd !== null) {
+          nextActive.setSelectionRange(activeElementInfo.selectionStart, activeElementInfo.selectionEnd)
+        }
+      }
+    }
+  }
+
+  let totalPagadoInSaleCurrency = 0
+  salePayments.forEach((pago) => {
+    const rateP = getLocalCurrencyRate(pago.id_moneda)
+    const rateS = getLocalCurrencyRate(idMonedaSale)
+    const montoInSaleCurrency = roundMoney((pago.monto * rateP) / rateS)
+    totalPagadoInSaleCurrency = roundMoney(totalPagadoInSaleCurrency + montoInSaleCurrency)
+  })
+
+  let saldoPendiente = 0
+  let cambio = 0
+  if (totalPagadoInSaleCurrency >= total) {
+    cambio = roundMoney(totalPagadoInSaleCurrency - total)
+  } else {
+    saldoPendiente = roundMoney(total - totalPagadoInSaleCurrency)
   }
 
   document.querySelector<HTMLElement>('#sale-summary-products')!.textContent = String(saleCart.size)
@@ -1079,8 +1604,12 @@ function renderSaleCart() {
     Array.from(saleCart.values()).reduce((sum, item) => sum + item.cantidad, 0),
   )
   document.querySelector<HTMLElement>('#sale-summary-subtotal')!.textContent = formatCurrency(subtotal)
-  document.querySelector<HTMLElement>('#sale-summary-discount')!.textContent = formatCurrency(validDiscount)
-  document.querySelector<HTMLElement>('#sale-total-output')!.textContent = formatCurrency(total)
+  document.querySelector<HTMLElement>('#sale-summary-discount')!.textContent = formatCurrency(validDiscountTotal)
+  document.querySelector<HTMLElement>('#sale-total-output')!.textContent = `${saleCurrencyCode} ${formatCurrency(total)}`
+
+  document.querySelector<HTMLElement>('#sale-paid-output')!.textContent = `${saleCurrencyCode} ${formatCurrency(totalPagadoInSaleCurrency)}`
+  document.querySelector<HTMLElement>('#sale-pending-output')!.textContent = `${saleCurrencyCode} ${formatCurrency(saldoPendiente)}`
+  document.querySelector<HTMLElement>('#sale-change-output')!.textContent = `${saleCurrencyCode} ${formatCurrency(cambio)}`
 }
 
 function fillProductForm(product: BootstrapData['products'][number]) {
@@ -1248,6 +1777,7 @@ async function refresh() {
   bootstrapData = await window.inventoryApi.getBootstrapData()
   renderMetricCards(bootstrapData)
   renderAppInfo(bootstrapData)
+  applyAccessControl()
   renderProductFormOptions(bootstrapData)
   renderWorkerRoleSelect(bootstrapData)
   renderPermissionsCheckboxes(bootstrapData)
@@ -1257,6 +1787,8 @@ async function refresh() {
   renderAttendanceState(bootstrapData)
   renderAttendanceTable(bootstrapData)
   renderWorkHoursTable(bootstrapData)
+  renderShiftRotationTable(bootstrapData)
+  renderShiftHistoryTable(bootstrapData)
   renderRolesTable(bootstrapData)
   renderWorkersTable(bootstrapData)
   renderAuditTable(bootstrapData)
@@ -1296,6 +1828,11 @@ async function bootstrap() {
   })
 
   document.querySelector<HTMLButtonElement>('#inventory-mode-toggle')?.addEventListener('click', async () => {
+    if (!hasPermission('GESTIONAR_INVENTARIO')) {
+      setStatus('inventory-status', 'No tienes permiso para cerrar inventario.', 'error')
+      return
+    }
+
     if (!bootstrapData) {
       return
     }
@@ -1314,6 +1851,11 @@ async function bootstrap() {
   })
 
   document.querySelector<HTMLButtonElement>('#inventory-close')?.addEventListener('click', async () => {
+    if (!hasPermission('GESTIONAR_INVENTARIO')) {
+      setStatus('inventory-audit-status', 'No tienes permiso para cerrar inventario.', 'error')
+      return
+    }
+
     if (!bootstrapData) {
       return
     }
@@ -1330,6 +1872,11 @@ async function bootstrap() {
 
   productForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('GESTIONAR_INVENTARIO')) {
+      setStatus('inventory-status', 'No tienes permiso para guardar productos.', 'error')
+      return
+    }
+
     try {
       const formData = new FormData(productForm)
       const payload: ProductFormInput = {
@@ -1359,6 +1906,10 @@ async function bootstrap() {
 
   movementForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('REGISTRAR_MOVIMIENTOS')) {
+      setStatus('movement-status', 'No tienes permiso para registrar movimientos.', 'error')
+      return
+    }
 
     try {
       const formData = new FormData(movementForm)
@@ -1385,6 +1936,48 @@ async function bootstrap() {
     renderProductSearchResults(saleSearchInput.value)
   })
 
+  saleSearchInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const query = saleSearchInput.value.trim()
+      if (!query || !bootstrapData) return
+
+      const normalizedQuery = normalizeSearch(query)
+      const activeProducts = bootstrapData.products
+        .filter((product) => isProductActive(product) && Number(product.stock_actual) > 0)
+
+      // 1. Try to find exact match by code or barcode
+      let matchedProduct = activeProducts.find(
+        (product) =>
+          normalizeSearch(product.codigo) === normalizedQuery ||
+          (product.codigo_barra && normalizeSearch(product.codigo_barra) === normalizedQuery)
+      )
+
+      // 2. If no exact match, see if there is only one product matching the query in the search results
+      if (!matchedProduct) {
+        const filtered = activeProducts.filter((product) =>
+          [
+            product.codigo,
+            product.codigo_barra,
+            product.nombre,
+            product.marca_nombre,
+          ].some((value) => normalizeSearch(value).includes(normalizedQuery))
+        )
+        if (filtered.length === 1) {
+          matchedProduct = filtered[0]
+        }
+      }
+
+      if (matchedProduct) {
+        addProductToCart(matchedProduct.id_producto)
+        saleSearchInput.value = ''
+        renderProductSearchResults('')
+      } else {
+        setStatus('sale-status', 'Producto no encontrado o múltiples coincidencias.', 'error')
+      }
+    }
+  })
+
   saleDiscountInput?.addEventListener('input', () => {
     renderSaleCart()
   })
@@ -1397,9 +1990,19 @@ async function bootstrap() {
 
   saleForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('REGISTRAR_VENTAS')) {
+      setStatus('sale-status', 'No tienes permiso para registrar ventas.', 'error')
+      return
+    }
+
+    if (!bootstrapData) {
+      return
+    }
+
     const formData = new FormData(saleForm)
     const subtotal = getSaleSubtotal()
-    const discountTotal = String(formData.get('descuento_total') ?? '').trim()
+
+    const discountManual = String(formData.get('descuento_total') ?? '').trim()
       ? Number(formData.get('descuento_total'))
       : 0
 
@@ -1408,34 +2011,77 @@ async function bootstrap() {
       return
     }
 
-    if (!Number.isFinite(discountTotal) || discountTotal < 0) {
-      setStatus('sale-status', 'El descuento no puede ser negativo.', 'error')
+    if (!Number.isFinite(discountManual) || discountManual < 0) {
+      setStatus('sale-status', 'El descuento manual no puede ser negativo.', 'error')
       return
     }
 
-    if (discountTotal > subtotal) {
-      setStatus('sale-status', 'El descuento no puede superar el subtotal.', 'error')
+    const idClienteVal = formData.get('id_cliente') ? Number(formData.get('id_cliente')) : 0
+    const idCliente = idClienteVal > 0 ? idClienteVal : null
+
+    const idVendedorVal = Number(formData.get('id_vendedor') ?? 0)
+    if (!idVendedorVal) {
+      setStatus('sale-status', 'Debe seleccionar un vendedor.', 'error')
       return
     }
 
-    const payload: SaleFormInput = {
-      detalles: Array.from(saleCart.values()).map((item) => ({
+    const idTurnoVal = formData.get('id_turno') ? Number(formData.get('id_turno')) : 0
+    const idTurno = idTurnoVal > 0 ? idTurnoVal : null
+
+    const idMoneda = Number(formData.get('id_moneda') ?? 1)
+    const tasaCambio = Number(formData.get('tasa_cambio_aplicada') ?? 1)
+
+    // Distributed general discount manual share
+    const details = Array.from(saleCart.values()).map((item) => {
+      const subtotalLine = roundMoney(Number(item.product.precio_venta) * item.cantidad)
+      const lineManualShare = subtotal === 0 ? 0 : roundMoney((subtotalLine / subtotal) * discountManual)
+      const lineManualShareUnit = roundMoney(lineManualShare / item.cantidad)
+      const totalDescuentoUnitario = roundMoney((item.descuento_unitario ?? 0) + lineManualShareUnit)
+
+      return {
         id_producto: item.product.id_producto,
         cantidad: item.cantidad,
-      })),
-      descuento_total: discountTotal,
-      id_metodo_pago: Number(formData.get('id_metodo_pago') ?? 0),
-      id_moneda: Number(formData.get('id_moneda') ?? 0),
+        descuento_unitario: totalDescuentoUnitario,
+        id_descuento: null as number | null
+      }
+    })
+
+    const payload: SaleFormInput = {
+      id_cliente: idCliente,
+      id_vendedor: idVendedorVal,
+      id_turno: idTurno,
+      id_moneda: idMoneda,
+      tasa_cambio_aplicada: tasaCambio,
       observacion: String(formData.get('observacion') ?? '').trim() || null,
+      detalles: details,
+      pagos: salePayments.map(pago => ({
+        id_metodo_pago: pago.id_metodo_pago,
+        id_moneda: pago.id_moneda,
+        monto: pago.monto,
+        referencia_pago: pago.referencia_pago
+      }))
     }
+    const submitBtn = saleForm.querySelector<HTMLButtonElement>('button[type="submit"]')
+    if (submitBtn) {
+      submitBtn.disabled = true
+      submitBtn.textContent = 'Procesando...'
+    }
+
     try {
       await window.inventoryApi.createSale(payload)
       setStatus('sale-status', 'Venta registrada correctamente.', 'success')
       saleCart.clear()
+      salePayments.length = 0
       saleForm.reset()
+      renderSalePayments()
       await refresh()
     } catch (error) {
       setStatus('sale-status', getFriendlyErrorMessage(error, 'No se pudo registrar la venta.'), 'error')
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false
+        submitBtn.textContent = 'Confirmar venta'
+      }
     }
   })
 
@@ -1453,10 +2099,16 @@ async function bootstrap() {
 
   attendanceForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('REGISTRAR_ASISTENCIAS')) {
+      setStatus('attendance-status', 'No tienes permiso para registrar asistencias.', 'error')
+      return
+    }
 
     try {
       const formData = new FormData(attendanceForm)
-      const workerId = readRequiredId(formData, 'id_trabajador', 'El trabajador')
+      const workerId = !currentUser?.isAdminLike && currentUser?.id_trabajador
+        ? currentUser.id_trabajador
+        : readRequiredId(formData, 'id_trabajador', 'El trabajador')
       const selectedShiftId = String(formData.get('id_turno') ?? '').trim()
         ? readRequiredId(formData, 'id_turno', 'El turno')
         : 0
@@ -1500,6 +2152,11 @@ async function bootstrap() {
   })
   roleForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('GESTIONAR_ROLES')) {
+      setStatus('role-status', 'No tienes permiso para guardar roles.', 'error')
+      return
+    }
+
     const formData = new FormData(roleForm)
     const checkedPermisos = Array.from(roleForm.querySelectorAll<HTMLInputElement>('input[name="permisos[]"]:checked')).map(cb => Number(cb.value))
     try {
@@ -1524,6 +2181,11 @@ async function bootstrap() {
   })
   workerForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('GESTIONAR_TRABAJADORES')) {
+      setStatus('worker-status', 'No tienes permiso para guardar trabajadores.', 'error')
+      return
+    }
+
     const formData = new FormData(workerForm)
     try {
       await window.inventoryApi.saveWorker({
@@ -1545,29 +2207,22 @@ async function bootstrap() {
     }
   })
 
-  document.querySelector<HTMLButtonElement>('#btn-entrada')?.addEventListener('click', async () => {
-    try {
-      await window.inventoryApi.recordAttendance({ tipo: 'ENTRADA' })
-      setStatus('attendance-status', 'Entrada registrada exitosamente.', 'success')
-    } catch (err) {
-      setStatus('attendance-status', err instanceof Error ? err.message : 'Error al registrar', 'error')
-    }
-  })
-  
-  document.querySelector<HTMLButtonElement>('#btn-salida')?.addEventListener('click', async () => {
-    try {
-      await window.inventoryApi.recordAttendance({ tipo: 'SALIDA' })
-      setStatus('attendance-status', 'Salida registrada exitosamente.', 'success')
-    } catch (err) {
-      setStatus('attendance-status', err instanceof Error ? err.message : 'Error al registrar', 'error')
-    }
-  })
-
   document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
     button.addEventListener('click', () => {
       const tabName = button.dataset.tab as TabName | undefined
       if (tabName) setActiveTab(tabName)
     })
+  })
+
+  setupPaymentHandlers()
+  setupModalCloseHandler()
+
+  document.querySelector('#sale-form select[name="id_moneda"]')?.addEventListener('change', () => {
+    updateSaleCurrencyRate()
+  })
+
+  document.querySelector('#sale-form select[name="id_vendedor"]')?.addEventListener('change', () => {
+    updateSaleShift()
   })
 
   document.querySelector<HTMLInputElement>('#inventory-search')?.addEventListener('input', async (event) => {
@@ -1610,6 +2265,120 @@ async function bootstrap() {
       renderInventoryChecklist(bootstrapData)
     }
   })
+
+  // Reportes tab handlers
+  document.querySelector<HTMLButtonElement>('#report-generate-btn')?.addEventListener('click', () => {
+    void loadSalesReportData()
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('.report-subtab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.report-subtab-btn').forEach((b) => b.classList.remove('is-active'))
+      btn.classList.add('is-active')
+      const targetSubpanel = btn.dataset.subtab
+      document.querySelectorAll('.report-table-panel').forEach((panel) => {
+        const p = panel as HTMLElement
+        p.classList.toggle('is-active', p.dataset.subpanel === targetSubpanel)
+      })
+    })
+  })
+}
+
+async function openSaleDetailModal(saleId: number) {
+  const modal = document.querySelector<HTMLDivElement>('#sale-detail-modal')
+  const body = document.querySelector<HTMLDivElement>('#sale-detail-modal-body')
+  if (!modal || !body) return
+
+  try {
+    const detail = await window.inventoryApi.getSaleDetail(saleId)
+    body.innerHTML = `
+      <div class="sale-detail-view">
+        <div class="sale-detail-grid form-grid">
+          <div class="field"><span>Factura</span><strong>${escapeHtml(detail.numero_factura)}</strong></div>
+          <div class="field"><span>Fecha</span><strong>${escapeHtml(formatDateTime(detail.fecha_venta))}</strong></div>
+          <div class="field"><span>Cliente</span><strong>${escapeHtml(detail.cliente_nombre || 'Consumidor final')}</strong></div>
+          <div class="field"><span>Vendedor</span><strong>${escapeHtml(detail.vendedor_nombre)}</strong></div>
+          <div class="field"><span>Turno</span><strong>${escapeHtml(detail.turno_nombre || 'Sin turno')}</strong></div>
+          <div class="field"><span>Estado</span><strong class="badge badge--soft">${escapeHtml(detail.estado)}</strong></div>
+          <div class="field"><span>Moneda</span><strong>${escapeHtml(detail.moneda_codigo)}</strong></div>
+          <div class="field"><span>Observación</span><strong>${escapeHtml(detail.observacion || '-')}</strong></div>
+        </div>
+
+        <h3 class="section-title" style="margin-top:16px;">Productos</h3>
+        <div class="table-wrap">
+          <table class="data-table" style="min-width: 100%">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>P. Unitario</th>
+                <th>Descuento Unit.</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${detail.detalles.map(d => `
+                <tr>
+                  <td><strong>${escapeHtml(d.nombre)}</strong><small>${escapeHtml(d.codigo)}</small></td>
+                  <td>${escapeHtml(formatCurrency(d.cantidad))}</td>
+                  <td>${escapeHtml(formatCurrency(d.precio_unitario))}</td>
+                  <td>${escapeHtml(formatCurrency(d.descuento_unitario))}</td>
+                  <td>${escapeHtml(formatCurrency(d.total_linea))}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="section-title" style="margin-top:16px;">Pagos Realizados</h3>
+        <div class="table-wrap">
+          <table class="data-table" style="min-width: 100%">
+            <thead>
+              <tr>
+                <th>Método</th>
+                <th>Moneda</th>
+                <th>Monto</th>
+                <th>Referencia</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${detail.pagos.map(p => `
+                <tr>
+                  <td><strong>${escapeHtml(p.metodo_pago)}</strong></td>
+                  <td>${escapeHtml(p.moneda_codigo)}</td>
+                  <td>${escapeHtml(formatCurrency(p.monto))}</td>
+                  <td>${escapeHtml(p.referencia_pago || '-')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sale-detail-totals" style="margin-top:16px; display:grid; gap:8px; justify-content:end; text-align:right;">
+          <div><span>Subtotal:</span> <strong>${escapeHtml(detail.moneda_codigo)} ${escapeHtml(formatCurrency(detail.subtotal))}</strong></div>
+          <div><span>Descuento:</span> <strong>${escapeHtml(detail.moneda_codigo)} ${escapeHtml(formatCurrency(detail.descuento_total))}</strong></div>
+          <div><span>Total Final:</span> <strong>${escapeHtml(detail.moneda_codigo)} ${escapeHtml(formatCurrency(detail.total))}</strong></div>
+          <div style="font-size:1.15rem; font-weight:800; color:var(--success); border-top:1px solid var(--border); padding-top:8px;"><span>Ganancia Neta:</span> <strong>${escapeHtml(detail.moneda_codigo)} ${escapeHtml(formatCurrency(detail.ganancia_total))}</strong></div>
+        </div>
+      </div>
+    `
+    modal.style.display = 'block'
+  } catch (error) {
+    alert(error instanceof Error ? error.message : 'No se pudo obtener el detalle de la venta.')
+  }
+}
+
+function setupModalCloseHandler() {
+  const modal = document.querySelector<HTMLDivElement>('#sale-detail-modal')
+  const closeBtn = document.querySelector<HTMLButtonElement>('#close-detail-modal-btn')
+  const overlay = document.querySelector<HTMLDivElement>('#sale-detail-modal-overlay')
+
+  const closeModal = () => {
+    if (modal) modal.style.display = 'none'
+  }
+
+  closeBtn?.addEventListener('click', closeModal)
+  overlay?.addEventListener('click', closeModal)
 }
 
 function initLogin() {
@@ -1649,6 +2418,388 @@ function initLogin() {
     document.getElementById('main-app')!.style.display = 'none'
     document.getElementById('login-overlay')!.style.display = 'flex'
     sidebar?.classList.remove('is-collapsed')
+  })
+}
+
+void initLogin()
+
+function initReportDates() {
+  const startDateInput = document.querySelector<HTMLInputElement>('#report-start-date')
+  const endDateInput = document.querySelector<HTMLInputElement>('#report-end-date')
+  if (startDateInput && !startDateInput.value) {
+    const today = new Date()
+    const yyyy = today.getFullYear()
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const dd = String(today.getDate()).padStart(2, '0')
+    startDateInput.value = `${yyyy}-${mm}-${dd}`
+  }
+  if (endDateInput && !endDateInput.value) {
+    const today = new Date()
+    const yyyy = today.getFullYear()
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const dd = String(today.getDate()).padStart(2, '0')
+    endDateInput.value = `${yyyy}-${mm}-${dd}`
+  }
+}
+
+async function loadSalesReportData() {
+  const startDateInput = document.querySelector<HTMLInputElement>('#report-start-date')
+  const endDateInput = document.querySelector<HTMLInputElement>('#report-end-date')
+  if (!startDateInput || !endDateInput) return
+
+  const startDate = startDateInput.value
+  const endDate = endDateInput.value
+  if (!startDate || !endDate) return
+
+  const btn = document.querySelector<HTMLButtonElement>('#report-generate-btn')
+  if (btn) {
+    btn.disabled = true
+    btn.textContent = 'Cargando...'
+  }
+
+  try {
+    const reportData = await window.inventoryApi.getSalesReport({ startDate, endDate })
+
+    // Render KPIs
+    document.querySelector('#kpi-total-vendido')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalVendido)}`
+    document.querySelector('#kpi-total-costo')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalCosto)}`
+    document.querySelector('#kpi-total-ganancia')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalGanancia)}`
+    document.querySelector('#kpi-total-cobrado')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalCobrado)}`
+    document.querySelector('#kpi-saldo-pendiente')!.textContent = `Bs ${formatCurrency(reportData.kpis.saldoPendiente)}`
+
+    // Update sales count badge
+    document.querySelector('#report-sales-count')!.textContent = `${reportData.kpis.cantidadVentas} ventas`
+
+    // Render Profits Table (SCRUM-16)
+    const profitsBody = document.querySelector('#report-profits-table tbody')
+    if (profitsBody) {
+      if (reportData.profitReport.length === 0) {
+        profitsBody.innerHTML = `<tr><td colspan="9" class="empty-state">No se registraron ventas en este rango de fechas.</td></tr>`
+      } else {
+        profitsBody.innerHTML = reportData.profitReport.map(row => `
+          <tr>
+            <td><strong>${escapeHtml(row.numero_factura)}</strong></td>
+            <td>${escapeHtml(row.fecha_venta.slice(0, 16).replace('T', ' '))}</td>
+            <td>${escapeHtml(row.vendedor)}</td>
+            <td>${escapeHtml(row.cliente)}</td>
+            <td style="text-align: right; font-weight: bold;">Bs ${escapeHtml(formatCurrency(row.total))}</td>
+            <td style="text-align: right; color: var(--muted);">Bs ${escapeHtml(formatCurrency(row.costo))}</td>
+            <td style="text-align: right; color: var(--success); font-weight: bold;">Bs ${escapeHtml(formatCurrency(row.ganancia))}</td>
+            <td style="text-align: right; color: var(--accent); font-weight: bold;">${escapeHtml(formatCurrency(row.margen))}%</td>
+            <td style="text-align: center;"><span class="status-badge ${row.estado.toLowerCase() === 'completada' ? 'status-badge--success' : 'status-badge--warning'}">${escapeHtml(row.estado)}</span></td>
+          </tr>
+        `).join('')
+      }
+    }
+
+    // Render Cash Flow Table (SCRUM-18)
+    const cashflowBody = document.querySelector('#report-cashflow-table tbody')
+    if (cashflowBody) {
+      if (reportData.cashFlowReport.length === 0) {
+        cashflowBody.innerHTML = `<tr><td colspan="3" class="empty-state">No se registraron cobros en este rango de fechas.</td></tr>`
+      } else {
+        cashflowBody.innerHTML = reportData.cashFlowReport.map(row => `
+          <tr>
+            <td><strong>${escapeHtml(row.metodo_pago)}</strong></td>
+            <td style="text-align: right; font-weight: bold; color: var(--success);">Bs ${escapeHtml(formatCurrency(row.total_recibido))}</td>
+            <td style="text-align: center; color: var(--muted);">${escapeHtml(row.referencias_count)} transacciones</td>
+          </tr>
+        `).join('')
+      }
+    }
+
+    // Render Charts (SCRUM-17)
+    renderBrandChart('brand-chart-container', reportData.charts.brands)
+    renderShiftChart('shift-chart-container', reportData.charts.shifts)
+    renderDailyTrendChart('daily-chart-container', reportData.charts.daily)
+
+  } catch (error) {
+    alert(error instanceof Error ? error.message : 'Error al generar el reporte.')
+  } finally {
+    if (btn) {
+      btn.disabled = false
+      btn.textContent = 'Generar Reporte'
+    }
+  }
+}
+
+function renderBrandChart(containerId: string, data: { marca: string; total_vendido: number }[]) {
+  const container = document.getElementById(containerId)
+  if (!container) return
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="empty-state">No hay datos de marcas.</div>'
+    return
+  }
+
+  const width = container.clientWidth || 300
+  const height = 200
+  const paddingLeft = 90
+  const paddingRight = 80
+  const paddingTop = 10
+  const paddingBottom = 10
+  const rowHeight = (height - paddingTop - paddingBottom) / Math.max(data.length, 1)
+
+  const maxValue = Math.max(...data.map(d => d.total_vendido), 1)
+
+  let svgContent = `<svg class="chart-svg" width="100%" height="${height}" viewBox="0 0 ${width} ${height}">`
+
+  let tooltipEl = container.querySelector('.chart-tooltip-el') as HTMLElement
+  if (!tooltipEl) {
+    tooltipEl = document.createElement('div')
+    tooltipEl.className = 'chart-tooltip-el'
+    container.appendChild(tooltipEl)
+  }
+
+  data.forEach((d, idx) => {
+    const y = paddingTop + idx * rowHeight + (rowHeight - 24) / 2
+    const barMaxWidth = width - paddingLeft - paddingRight
+    const barWidth = Math.max((d.total_vendido / maxValue) * barMaxWidth, 4)
+
+    svgContent += `
+      <g class="chart-group" data-label="${escapeHtml(d.marca)}" data-value="Bs ${escapeHtml(formatCurrency(d.total_vendido))}">
+        <text class="chart-text" x="${paddingLeft - 10}" y="${y + 16}" text-anchor="end" style="font-weight: 600;">${escapeHtml(d.marca)}</text>
+        <rect x="${paddingLeft}" y="${y}" width="${barMaxWidth}" height="24" rx="4" fill="#f1f5f9" />
+        <rect class="chart-bar" x="${paddingLeft}" y="${y}" width="${barWidth}" height="24" rx="4" fill="url(#brandGrad)" />
+        <text class="chart-text" x="${paddingLeft + barWidth + 8}" y="${y + 16}" style="font-weight: 700; fill: var(--text);">${escapeHtml(formatCurrency(d.total_vendido))}</text>
+      </g>
+    `
+  })
+
+  svgContent += `
+    <defs>
+      <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#0ea5a6" />
+        <stop offset="100%" stop-color="#0f766e" />
+      </linearGradient>
+    </defs>
+  `
+
+  svgContent += '</svg>'
+  container.innerHTML = svgContent
+  container.appendChild(tooltipEl)
+
+  container.querySelectorAll('.chart-group').forEach(group => {
+    group.addEventListener('mouseenter', () => {
+      const label = group.getAttribute('data-label')
+      const val = group.getAttribute('data-value')
+      tooltipEl.innerHTML = `<strong>${label}</strong><br/>${val}`
+      tooltipEl.style.opacity = '1'
+    })
+    group.addEventListener('mousemove', (e: any) => {
+      const rect = container.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      tooltipEl.style.left = `${x}px`
+      tooltipEl.style.top = `${y}px`
+    })
+    group.addEventListener('mouseleave', () => {
+      tooltipEl.style.opacity = '0'
+    })
+  })
+}
+
+function renderShiftChart(containerId: string, data: { turno: string; total_vendido: number }[]) {
+  const container = document.getElementById(containerId)
+  if (!container) return
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="empty-state">No hay datos de turnos.</div>'
+    return
+  }
+
+  const width = container.clientWidth || 300
+  const height = 200
+  const paddingLeft = 50
+  const paddingRight = 20
+  const paddingTop = 20
+  const paddingBottom = 40
+
+  const colWidth = (width - paddingLeft - paddingRight) / Math.max(data.length, 1)
+  const maxValue = Math.max(...data.map(d => d.total_vendido), 1)
+
+  let svgContent = `<svg class="chart-svg" width="100%" height="${height}" viewBox="0 0 ${width} ${height}">`
+
+  let tooltipEl = container.querySelector('.chart-tooltip-el') as HTMLElement
+  if (!tooltipEl) {
+    tooltipEl = document.createElement('div')
+    tooltipEl.className = 'chart-tooltip-el'
+    container.appendChild(tooltipEl)
+  }
+
+  const gridLinesCount = 4
+  const chartHeight = height - paddingTop - paddingBottom
+  const chartWidth = width - paddingLeft - paddingRight
+
+  for (let i = 0; i <= gridLinesCount; i++) {
+    const y = paddingTop + (chartHeight / gridLinesCount) * i
+    const val = maxValue - (maxValue / gridLinesCount) * i
+    svgContent += `
+      <line class="chart-grid-line" x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" />
+      <text class="chart-text" x="${paddingLeft - 8}" y="${y + 4}" text-anchor="end">${escapeHtml(Math.round(val))}</text>
+    `
+  }
+
+  data.forEach((d, idx) => {
+    const barHeight = (d.total_vendido / maxValue) * chartHeight
+    const x = paddingLeft + idx * colWidth + (colWidth - 36) / 2
+    const y = height - paddingBottom - barHeight
+
+    svgContent += `
+      <g class="chart-group" data-label="${escapeHtml(d.turno)}" data-value="Bs ${escapeHtml(formatCurrency(d.total_vendido))}">
+        <rect x="${x}" y="${paddingTop}" width="36" height="${chartHeight}" rx="4" fill="#f1f5f9" />
+        <rect class="chart-bar" x="${x}" y="${y}" width="36" height="${barHeight}" rx="4" fill="url(#shiftGrad)" />
+        <text class="chart-text" x="${x + 18}" y="${height - paddingBottom + 16}" text-anchor="middle" style="font-weight: 600;">${escapeHtml(d.turno)}</text>
+      </g>
+    `
+  })
+
+  svgContent += `
+    <defs>
+      <linearGradient id="shiftGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+        <stop offset="0%" stop-color="#9333ea" />
+        <stop offset="100%" stop-color="#7c3aed" />
+      </linearGradient>
+    </defs>
+  `
+
+  svgContent += '</svg>'
+  container.innerHTML = svgContent
+  container.appendChild(tooltipEl)
+
+  container.querySelectorAll('.chart-group').forEach(group => {
+    group.addEventListener('mouseenter', () => {
+      const label = group.getAttribute('data-label')
+      const val = group.getAttribute('data-value')
+      tooltipEl.innerHTML = `<strong>${label}</strong><br/>${val}`
+      tooltipEl.style.opacity = '1'
+    })
+    group.addEventListener('mousemove', (e: any) => {
+      const rect = container.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      tooltipEl.style.left = `${x}px`
+      tooltipEl.style.top = `${y}px`
+    })
+    group.addEventListener('mouseleave', () => {
+      tooltipEl.style.opacity = '0'
+    })
+  })
+}
+
+function renderDailyTrendChart(containerId: string, data: { fecha: string; total_vendido: number; total_ganancia: number }[]) {
+  const container = document.getElementById(containerId)
+  if (!container) return
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="empty-state">No hay datos de evolución diaria.</div>'
+    return
+  }
+
+  const width = container.clientWidth || 600
+  const height = 220
+  const paddingLeft = 50
+  const paddingRight = 20
+  const paddingTop = 20
+  const paddingBottom = 40
+
+  const chartWidth = width - paddingLeft - paddingRight
+  const chartHeight = height - paddingTop - paddingBottom
+
+  const maxVal = Math.max(...data.map(d => Math.max(d.total_vendido, d.total_ganancia)), 1)
+
+  let svgContent = `<svg class="chart-svg" width="100%" height="${height}" viewBox="0 0 ${width} ${height}">`
+
+  let tooltipEl = container.querySelector('.chart-tooltip-el') as HTMLElement
+  if (!tooltipEl) {
+    tooltipEl = document.createElement('div')
+    tooltipEl.className = 'chart-tooltip-el'
+    container.appendChild(tooltipEl)
+  }
+
+  const gridLinesCount = 4
+  for (let i = 0; i <= gridLinesCount; i++) {
+    const y = paddingTop + (chartHeight / gridLinesCount) * i
+    const val = maxVal - (maxVal / gridLinesCount) * i
+    svgContent += `
+      <line class="chart-grid-line" x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" />
+      <text class="chart-text" x="${paddingLeft - 8}" y="${y + 4}" text-anchor="end">${escapeHtml(Math.round(val))}</text>
+    `
+  }
+
+  const totalPoints = data.length
+  const stepX = totalPoints > 1 ? chartWidth / (totalPoints - 1) : chartWidth
+
+  const salesPoints = data.map((d, i) => {
+    const x = paddingLeft + i * stepX
+    const y = height - paddingBottom - (d.total_vendido / maxVal) * chartHeight
+    return { x, y, val: d.total_vendido, label: d.fecha }
+  })
+
+  const profitPoints = data.map((d, i) => {
+    const x = paddingLeft + i * stepX
+    const y = height - paddingBottom - (d.total_ganancia / maxVal) * chartHeight
+    return { x, y, val: d.total_ganancia, label: d.fecha }
+  })
+
+  const getLinePath = (points: { x: number; y: number }[]) => {
+    return points.reduce((path, p, i) => path + (i === 0 ? `M ${p.x} ${p.y}` : ` L ${p.x} ${p.y}`), '')
+  }
+
+  const getAreaPath = (points: { x: number; y: number }[]) => {
+    if (points.length === 0) return ''
+    const startX = points[0].x
+    const endX = points[points.length - 1].x
+    const yBase = height - paddingBottom
+    return `${getLinePath(points)} L ${endX} ${yBase} L ${startX} ${yBase} Z`
+  }
+
+  svgContent += `<path class="chart-area" d="${getAreaPath(salesPoints)}" fill="#0284c7" />`
+  svgContent += `<path class="chart-line" d="${getLinePath(salesPoints)}" stroke="#0284c7" stroke-width="3" />`
+
+  svgContent += `<path class="chart-area" d="${getAreaPath(profitPoints)}" fill="#16a34a" />`
+  svgContent += `<path class="chart-line" d="${getLinePath(profitPoints)}" stroke="#16a34a" stroke-width="3" />`
+
+  salesPoints.forEach((p, i) => {
+    const pr = profitPoints[i]
+    const showLabel = totalPoints <= 7 || i % Math.ceil(totalPoints / 7) === 0
+    if (showLabel) {
+      const dateParts = p.label.split('-')
+      const formattedDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}` : p.label
+      svgContent += `
+        <text class="chart-text" x="${p.x}" y="${height - paddingBottom + 18}" text-anchor="middle" style="font-weight: 600;">${escapeHtml(formattedDate)}</text>
+      `
+    }
+
+    svgContent += `
+      <circle class="chart-dot chart-group" cx="${p.x}" cy="${p.y}" r="4" fill="#ffffff" stroke="#0284c7" stroke-width="2" 
+        data-label="Vendido (${escapeHtml(p.label)})" data-value="Bs ${escapeHtml(formatCurrency(p.val))}" />
+    `
+
+    svgContent += `
+      <circle class="chart-dot chart-group" cx="${pr.x}" cy="${pr.y}" r="4" fill="#ffffff" stroke="#16a34a" stroke-width="2" 
+        data-label="Ganancia (${escapeHtml(pr.label)})" data-value="Bs ${escapeHtml(formatCurrency(pr.val))}" />
+    `
+  })
+
+  svgContent += '</svg>'
+  container.innerHTML = svgContent
+  container.appendChild(tooltipEl)
+
+  container.querySelectorAll('.chart-group').forEach(group => {
+    group.addEventListener('mouseenter', () => {
+      const label = group.getAttribute('data-label')
+      const val = group.getAttribute('data-value')
+      tooltipEl.innerHTML = `<strong>${label}</strong><br/>${val}`
+      tooltipEl.style.opacity = '1'
+    })
+    group.addEventListener('mousemove', (e: any) => {
+      const rect = container.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      tooltipEl.style.left = `${x}px`
+      tooltipEl.style.top = `${y}px`
+    })
+    group.addEventListener('mouseleave', () => {
+      tooltipEl.style.opacity = '0'
+    })
   })
 }
 
