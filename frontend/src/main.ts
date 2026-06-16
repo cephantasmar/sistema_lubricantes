@@ -17,11 +17,7 @@ import type {
   SalesReportData,
 } from '@shared/ipc/contracts'
 
-<<<<<<< HEAD
-type TabName = 'bienvenida' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion'
-=======
-type TabName = 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion' | 'reportes'
->>>>>>> origin/SPRINT2
+type TabName = 'bienvenida' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion' | 'reportes'
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
 
@@ -75,6 +71,8 @@ function hasAnyPermission(permissionNames: string[]) {
 
 function canAccessTab(tabName: TabName) {
   const accessByTab: Record<TabName, boolean> = {
+    bienvenida: true,
+    dashboard: true,
     inventario: hasAnyPermission(['VER_INVENTARIO', 'GESTIONAR_INVENTARIO']),
     movimientos: hasAnyPermission(['VER_MOVIMIENTOS', 'REGISTRAR_MOVIMIENTOS']),
     ventas: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
@@ -374,17 +372,10 @@ const productOptions = data.products.map((product) => ({
 
     renderSelectOptions(saleForm.elements.namedItem('id_vendedor') as HTMLSelectElement, trabajadoresMapped, false)
     renderSelectOptions(
-<<<<<<< HEAD
-      attendanceForm.elements.namedItem('id_trabajador') as HTMLSelectElement,
-      data.references.trabajadores.map((worker) => ({
-        id: worker.id_trabajador,
-        nombre: `${worker.nombres} ${worker.apellidos}${worker.cargo ? ` - ${worker.cargo}` : ''}`,
-=======
       saleForm.elements.namedItem('id_turno') as HTMLSelectElement,
       data.references.turnos.map((shift) => ({
         id: shift.id_turno,
         nombre: `${shift.nombre} (${shift.hora_inicio} - ${shift.hora_fin})`,
->>>>>>> origin/SPRINT2
       })),
       true,
     )
@@ -1065,11 +1056,6 @@ function buildInventoryAuditPayload(data: BootstrapData): InventoryAuditInput {
     observacion: 'Cierre de inventario desde checklist',
   }
 }
-<<<<<<< HEAD
-=======
-
-}
->>>>>>> origin/SPRINT2
 
 function renderRolesTable(data: BootstrapData) {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#roles-table tbody')

@@ -30,7 +30,6 @@
     </div>
     <div class="shell" id="main-app" style="display: none;">
 
-<<<<<<< HEAD
       <div class="shell-body">
         <aside class="sidebar" id="main-sidebar">
           <div class="sidebar-header">
@@ -46,48 +45,12 @@
             <button class="tabs__button" type="button" data-tab="turnos" role="tab" aria-selected="false"><i class="ti ti-clock"></i> Turnos</button>
             <button class="tabs__button" type="button" data-tab="asistencias" role="tab" aria-selected="false"><i class="ti ti-user-check"></i> Asistencias</button>
             <button class="tabs__button" type="button" data-tab="administracion" role="tab" aria-selected="false"><i class="ti ti-settings"></i> Administración</button>
+            <button class="tabs__button" type="button" data-tab="reportes" role="tab" aria-selected="false"><i class="ti ti-chart-bar"></i> Reportes</button>
           </nav>
           <div class="sidebar-footer">
             <button id="logout-btn"><i class="ti ti-logout"></i> <span>Cerrar sesión</span></button>
           </div>
         </aside>
-=======
-        <div class="topbar-widgets">
-          <section class="status-card">
-            <h2>Estado del sistema</h2>
-            <div id="app-info" class="info-list">
-              <div class="info-item">Cargando información del sistema...</div>
-            </div>
-          </section>
-
-          <section class="status-card">
-            <h2>Resumen rápido</h2>
-            <div id="quick-stats" class="mini-stats"></div>
-          </section>
-
-          <section class="status-card">
-            <h2>Mi Cuenta</h2>
-            <div class="info-list">
-              <div class="info-item"><span>Usuario</span><strong id="nav-user-name">...</strong></div>
-              <div class="info-item"><span>Rol</span><strong id="nav-user-role">...</strong></div>
-            </div>
-            <button class="button button--ghost" id="logout-btn" style="margin-top: 10px; width: 100%; padding: 6px; font-size: 0.85rem; border-color: var(--danger); color: var(--danger);">Cerrar sesión</button>
-          </section>
-        </div>
-      </header>
-
-      <main class="workspace">
-        <section class="summary-grid" aria-label="Resumen del sistema" id="dashboard-metrics"></section>
-
-        <nav class="tabs" role="tablist" aria-label="Secciones principales">
-          <button class="tabs__button is-active" type="button" data-tab="inventario" role="tab" aria-selected="true">Inventario</button>
-          <button class="tabs__button" type="button" data-tab="movimientos" role="tab" aria-selected="false">Movimientos</button>
-          <button class="tabs__button" type="button" data-tab="ventas" role="tab" aria-selected="false">Ventas</button>
-          <button class="tabs__button" type="button" data-tab="turnos" role="tab" aria-selected="false">Turnos</button>
-          <button class="tabs__button" type="button" data-tab="administracion" role="tab" aria-selected="false">Administración</button>
-          <button class="tabs__button" type="button" data-tab="reportes" role="tab" aria-selected="false">Reportes</button>
-        </nav>
->>>>>>> origin/SPRINT2
 
         <main class="workspace">
         <div class="tab-panels">
@@ -920,6 +883,26 @@
                       <tbody></tbody>
                     </table>
                   </div>
+                </section>
+              </div>
+          </section>
+
+          <section class="tab-panel" data-panel="asistencias" role="tabpanel">
+              <div class="module-layout">
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Control horario</span>
+                      <h2>Registrar Asistencia</h2>
+                    </div>
+                  </div>
+                  <p class="module-status" id="attendance-status"></p>
+                  <form id="attendance-form-simple" class="form-grid">
+                    <div class="form-actions field--wide" style="display: flex; gap: 1rem;">
+                      <button class="button button--primary" type="button" id="btn-entrada" style="flex: 1;">Registrar Entrada</button>
+                      <button class="button button--primary" type="button" id="btn-salida" style="flex: 1;">Registrar Salida</button>
+                    </div>
+                  </form>
                 </section>
               </div>
           </section>
