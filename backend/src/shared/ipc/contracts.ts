@@ -106,6 +106,9 @@ export type AuthResult = {
     username: string
     id_trabajador: number | null
     nombres: string | null
+    roleNames: string[]
+    permissionNames: string[]
+    isAdminLike: boolean
   }
 }
 
@@ -142,6 +145,30 @@ export type WorkHoursSummaryRow = {
   asistencias_completadas: number
   minutos_trabajados: number
   horas_trabajadas: number
+}
+
+export type ShiftHistoryRow = {
+  id_asistencia: number
+  id_trabajador: number
+  trabajador_nombre: string
+  cargo: string | null
+  turno_nombre: string
+  fecha: string
+  hora_entrada: string | null
+  hora_salida: string | null
+  estado: 'EN_TURNO' | 'COMPLETADO'
+}
+
+export type ShiftRotationSummaryRow = {
+  id_trabajador: number
+  trabajador_nombre: string
+  cargo: string | null
+  turnos_manana: number
+  turnos_tarde: number
+  turnos_noche: number
+  total_turnos: number
+  ultimo_turno: string | null
+  ultima_fecha: string | null
 }
 
 export type ProductFormInput = {
@@ -264,6 +291,8 @@ export type BootstrapData = {
   sales: SaleRow[]
   attendances: AttendanceRow[]
   workHoursSummary: WorkHoursSummaryRow[]
+  shiftHistory: ShiftHistoryRow[]
+  shiftRotationSummary: ShiftRotationSummaryRow[]
   roles: RoleRow[]
   workers: WorkerRow[]
   auditLogs: AuditLogRow[]

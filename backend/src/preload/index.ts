@@ -11,8 +11,7 @@ import type {
   AuthInput,
   AuthResult,
   RoleFormInput,
-  WorkerFormInput,
-  AttendanceInput
+  WorkerFormInput
 } from '../shared/ipc/contracts'
 
 contextBridge.exposeInMainWorld('inventoryApi', {
@@ -34,5 +33,4 @@ contextBridge.exposeInMainWorld('inventoryApi', {
   login: (payload: AuthInput) => ipcRenderer.invoke('auth:login', payload) as Promise<AuthResult>,
   saveRole: (payload: RoleFormInput) => ipcRenderer.invoke('admin:save-role', payload) as Promise<{ roleId: number }>,
   saveWorker: (payload: WorkerFormInput) => ipcRenderer.invoke('admin:save-worker', payload) as Promise<{ workerId: number }>,
-  recordAttendance: (payload: AttendanceInput) => ipcRenderer.invoke('shifts:record-attendance', payload) as Promise<{ attendanceId: number }>,
 })
