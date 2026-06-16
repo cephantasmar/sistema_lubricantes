@@ -29,7 +29,6 @@
       </div>
     </div>
     <div class="shell" id="main-app" style="display: none;">
-
       <div class="shell-body">
         <aside class="sidebar" id="main-sidebar">
           <div class="sidebar-header">
@@ -53,7 +52,23 @@
         </aside>
 
         <main class="workspace">
-        <div class="tab-panels">
+          <section class="landing-panel" aria-label="Bienvenida al sistema">
+            <div class="landing-panel__content">
+              <span class="module-kicker">Panel de trabajo</span>
+              <h2 id="landing-welcome">Bienvenido</h2>
+              <p id="landing-message">Organiza inventario, ventas y turnos desde un solo lugar.</p>
+            </div>
+
+            <aside class="landing-clock" aria-label="Fecha y hora actual">
+              <span id="landing-date">Cargando fecha...</span>
+              <strong id="landing-clock">--:--</strong>
+              <small>Hora local del equipo</small>
+            </aside>
+          </section>
+
+          <section class="summary-grid" aria-label="Resumen del sistema" id="dashboard-metrics"></section>
+
+          <div class="tab-panels">
             <section class="tab-panel is-active" data-panel="bienvenida" role="tabpanel">
               <div class="welcome-banner">
                 <div class="brand-block">
