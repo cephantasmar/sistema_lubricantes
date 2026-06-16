@@ -68,7 +68,6 @@
           <button class="tabs__button" type="button" data-tab="movimientos" role="tab" aria-selected="false">Movimientos</button>
           <button class="tabs__button" type="button" data-tab="ventas" role="tab" aria-selected="false">Ventas</button>
           <button class="tabs__button" type="button" data-tab="turnos" role="tab" aria-selected="false">Turnos</button>
-          <button class="tabs__button" type="button" data-tab="asistencias" role="tab" aria-selected="false">Asistencias</button>
           <button class="tabs__button" type="button" data-tab="administracion" role="tab" aria-selected="false">Administración</button>
           <button class="tabs__button" type="button" data-tab="reportes" role="tab" aria-selected="false">Reportes</button>
         </nav>
@@ -799,25 +798,56 @@
                     </table>
                   </div>
                 </section>
-              </div>
-          </section>
 
-          <section class="tab-panel" data-panel="asistencias" role="tabpanel">
-              <div class="module-layout">
-                <section class="module-card">
+                <section class="module-card module-card--wide">
                   <div class="module-card__header">
                     <div>
-                      <span class="module-kicker">Control horario</span>
-                      <h2>Registrar Asistencia</h2>
+                      <span class="module-kicker">Rotacion</span>
+                      <h2>Resumen por turno</h2>
                     </div>
                   </div>
-                  <p class="module-status" id="attendance-status"></p>
-                  <form id="attendance-form-simple" class="form-grid">
-                    <div class="form-actions field--wide" style="display: flex; gap: 1rem;">
-                      <button class="button button--primary" type="button" id="btn-entrada" style="flex: 1;">Registrar Entrada</button>
-                      <button class="button button--primary" type="button" id="btn-salida" style="flex: 1;">Registrar Salida</button>
+
+                  <div class="table-wrap">
+                    <table class="data-table" id="shift-rotation-table">
+                      <thead>
+                        <tr>
+                          <th>Trabajador</th>
+                          <th>Cargo</th>
+                          <th>Mañana</th>
+                          <th>Tarde</th>
+                          <th>Noche</th>
+                          <th>Total</th>
+                          <th>Ultimo turno</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section class="module-card module-card--wide">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Planilla</span>
+                      <h2>Historial de turnos del personal</h2>
                     </div>
-                  </form>
+                  </div>
+
+                  <div class="table-wrap">
+                    <table class="data-table" id="shift-history-table">
+                      <thead>
+                        <tr>
+                          <th>Fecha</th>
+                          <th>Trabajador</th>
+                          <th>Turno</th>
+                          <th>Entrada</th>
+                          <th>Salida</th>
+                          <th>Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
                 </section>
               </div>
           </section>

@@ -1,7 +1,6 @@
 import './style.css'
 import type {
   AttendanceFormInput,
-  AttendanceInput,
   AuthInput,
   AuthResult,
   BootstrapData,
@@ -41,6 +40,7 @@ type WorkerFormState = { id_trabajador: number | null }
 const workerFormState: WorkerFormState = { id_trabajador: null }
 
 let bootstrapData: BootstrapData | null = null
+let currentUser: NonNullable<AuthResult['user']> | null = null
 const saleCart = new Map<number, { product: ProductRow; cantidad: number; descuento_unitario: number }>()
 
 type LocalPayment = {
@@ -53,7 +53,6 @@ type LocalPayment = {
 }
 
 const salePayments: LocalPayment[] = []
-let currentUser: { id_usuario: number; username: string; id_trabajador: number | null; nombres: string | null } | null = null
 let inventoryAuditMode = false
 let inventoryAuditRows: InventoryAuditRowState[] = []
 let appInfoSnapshot: { appName: string; version: string; databasePath: string } | null = null
@@ -61,14 +60,43 @@ let inventorySearchTerm = ''
 let inventorySearchField: InventorySearchField = 'all'
 let inventoryAuditSearchTerm = ''
 
+function hasPermission(permissionName: string) {
+  return Boolean(currentUser?.isAdminLike || currentUser?.permissionNames.includes(permissionName))
+}
+
+function hasAnyPermission(permissionNames: string[]) {
+  return permissionNames.some((permissionName) => hasPermission(permissionName))
+}
+
+function canAccessTab(tabName: TabName) {
+  const accessByTab: Record<TabName, boolean> = {
+    inventario: hasAnyPermission(['VER_INVENTARIO', 'GESTIONAR_INVENTARIO']),
+    movimientos: hasAnyPermission(['VER_MOVIMIENTOS', 'REGISTRAR_MOVIMIENTOS']),
+    ventas: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
+    turnos: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
+    asistencias: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
+    administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES']),
+    reportes: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
+  }
+
+  return accessByTab[tabName]
+}
+
+function getFirstAccessibleTab(): TabName {
+  return (['inventario', 'movimientos', 'ventas', 'turnos', 'asistencias', 'administracion', 'reportes'] as TabName[]).find(canAccessTab) ?? 'inventario'
+}
+
+
 function setActiveTab(tabName: TabName) {
+  const nextTab = canAccessTab(tabName) ? tabName : getFirstAccessibleTab()
+
   document.querySelectorAll<HTMLElement>('[data-tab]').forEach((button) => {
-    const isActive = button.dataset.tab === tabName
+    const isActive = button.dataset.tab === nextTab
     button.classList.toggle('is-active', isActive)
     button.setAttribute('aria-selected', String(isActive))
   })
   document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
-    panel.classList.toggle('is-active', panel.dataset.panel === tabName)
+    panel.classList.toggle('is-active', panel.dataset.panel === nextTab)
   })
 
   if (tabName === 'ventas') {
@@ -231,17 +259,7 @@ if (!container) {
   if (navUserName) navUserName.textContent = currentUser?.nombres || currentUser?.username || 'Usuario'
 
   if (navUserRole) {
-    let roleName = 'Administrador'
-    if (currentUser?.id_trabajador) {
-      const worker = data.workers.find(w => w.id_trabajador === currentUser?.id_trabajador)
-      if (worker && worker.id_rol) {
-        const role = data.roles.find(r => r.id_rol === worker.id_rol)
-        if (role) roleName = role.nombre
-      } else {
-        roleName = 'Sin rol asignado'
-      }
-    }
-    navUserRole.textContent = roleName
+    navUserRole.textContent = currentUser?.roleNames.length ? currentUser.roleNames.join(', ') : 'Sin rol asignado'
   }
 
 }
@@ -256,6 +274,59 @@ function renderSelectOptions(select: HTMLSelectElement | null, options: Array<{ 
     ...options.map((option) => `<option value="${option.id}">${escapeHtml(option.nombre)}</option>`),
   ]
   select.innerHTML = items.join('')
+}
+
+function setClosestCardHidden(selector: string, hidden: boolean) {
+  document.querySelector<HTMLElement>(selector)?.closest<HTMLElement>('.module-card')?.toggleAttribute('hidden', hidden)
+}
+
+function applyAccessControl() {
+  const accessByTab: Record<TabName, boolean> = {
+    inventario: canAccessTab('inventario'),
+    movimientos: canAccessTab('movimientos'),
+    ventas: canAccessTab('ventas'),
+    turnos: canAccessTab('turnos'),
+    administracion: canAccessTab('administracion'),
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
+    const tabName = button.dataset.tab as TabName | undefined
+    const allowed = tabName ? accessByTab[tabName] : false
+    button.hidden = !allowed
+    button.disabled = !allowed
+  })
+
+  document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
+    const tabName = panel.dataset.panel as TabName | undefined
+    const allowed = tabName ? accessByTab[tabName] : false
+    panel.hidden = !allowed
+    if (!allowed) {
+      panel.classList.remove('is-active')
+    }
+  })
+
+  setClosestCardHidden('#product-form', !hasPermission('GESTIONAR_INVENTARIO'))
+  document.querySelector<HTMLButtonElement>('#inventory-mode-toggle')?.toggleAttribute('hidden', !hasPermission('GESTIONAR_INVENTARIO'))
+  if (!hasPermission('GESTIONAR_INVENTARIO') && inventoryAuditMode) {
+    setInventoryAuditMode(false)
+  }
+
+  setClosestCardHidden('#movement-form', !hasPermission('REGISTRAR_MOVIMIENTOS'))
+  setClosestCardHidden('#sale-form', !hasPermission('REGISTRAR_VENTAS'))
+  const canManageAttendancePanel = Boolean(currentUser?.isAdminLike)
+  setClosestCardHidden('#attendance-form', !hasPermission('REGISTRAR_ASISTENCIAS'))
+  setClosestCardHidden('#attendance-table', !canManageAttendancePanel)
+  setClosestCardHidden('#work-hours-table', !canManageAttendancePanel)
+  setClosestCardHidden('#shift-rotation-table', !canManageAttendancePanel)
+  setClosestCardHidden('#shift-history-table', !canAccessTab('turnos'))
+  setClosestCardHidden('#role-form', !hasPermission('GESTIONAR_ROLES'))
+  setClosestCardHidden('#worker-form', !hasPermission('GESTIONAR_TRABAJADORES'))
+  setClosestCardHidden('#audit-table', !Boolean(currentUser?.isAdminLike))
+
+  const activeTab = document.querySelector<HTMLElement>('[data-tab].is-active')?.dataset.tab as TabName | undefined
+  if (!activeTab || !canAccessTab(activeTab)) {
+    setActiveTab(getFirstAccessibleTab())
+  }
 }
 
 function renderProductFormOptions(data: BootstrapData) {
@@ -336,14 +407,21 @@ const productOptions = data.products.map((product) => ({
   }
 
   if (attendanceForm) {
+    const workerSelect = attendanceForm.elements.namedItem('id_trabajador') as HTMLSelectElement
     renderSelectOptions(
-      attendanceForm.elements.namedItem('id_trabajador') as HTMLSelectElement,
+      workerSelect,
       data.references.trabajadores.map((worker) => ({
         id: worker.id_trabajador,
-        nombre: `${worker.nombre_completo}${worker.cargo ? ` - ${worker.cargo}` : ''}`,
+        nombre: `${worker.nombres} ${worker.apellidos}${worker.cargo ? ` - ${worker.cargo}` : ''}`,
       })),
       true,
     )
+    if (!currentUser?.isAdminLike && currentUser?.id_trabajador) {
+      workerSelect.value = String(currentUser.id_trabajador)
+      workerSelect.disabled = true
+    } else {
+      workerSelect.disabled = false
+    }
     renderSelectOptions(
       attendanceForm.elements.namedItem('id_turno') as HTMLSelectElement,
       data.references.turnos.map((shift) => ({
@@ -427,7 +505,7 @@ function renderProductsTable(data: BootstrapData) {
           <td><span class="badge ${product.estado ? 'badge--success' : 'badge--muted'}">${product.estado ? 'Activo' : 'Inactivo'}</span></td>
           <td>
             <div class="row-actions">
-              <button class="button button--small" type="button" data-product-edit="${product.id_producto}">Editar</button>
+              ${hasPermission('GESTIONAR_INVENTARIO') ? `<button class="button button--small" type="button" data-product-edit="${product.id_producto}">Editar</button>` : ''}
             </div>
           </td>
         </tr>
@@ -597,11 +675,11 @@ function renderAttendanceTable(data: BootstrapData) {
   }
 
   if (count) {
-    count.textContent = `${data.attendances.length} registros`
+    count.textContent = `${data.attendances.length} hoy`
   }
 
   if (data.attendances.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">Todavia no hay entradas o salidas registradas.</td></tr>'
+    tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">Todavia no hay entradas o salidas registradas hoy.</td></tr>'
     return
   }
 
@@ -652,6 +730,69 @@ function renderWorkHoursTable(data: BootstrapData) {
         </tr>
       `
     })
+    .join('')
+}
+
+function renderShiftRotationTable(data: BootstrapData) {
+  const tableBody = document.querySelector<HTMLTableSectionElement>('#shift-rotation-table tbody')
+
+  if (!tableBody) {
+    return
+  }
+
+  if (data.shiftRotationSummary.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">Todavia no hay rotacion de turnos registrada.</td></tr>'
+    return
+  }
+
+  tableBody.innerHTML = data.shiftRotationSummary
+    .map(
+      (summary) => `
+        <tr>
+          <td><strong>${escapeHtml(summary.trabajador_nombre)}</strong></td>
+          <td>${escapeHtml(summary.cargo ?? 'Sin cargo')}</td>
+          <td>${escapeHtml(summary.turnos_manana)}</td>
+          <td>${escapeHtml(summary.turnos_tarde)}</td>
+          <td>${escapeHtml(summary.turnos_noche)}</td>
+          <td><strong>${escapeHtml(summary.total_turnos)}</strong></td>
+          <td>
+            <strong>${escapeHtml(summary.ultimo_turno ?? 'Sin turno')}</strong>
+            <small>${escapeHtml(summary.ultima_fecha ?? 'Sin fecha')}</small>
+          </td>
+        </tr>
+      `,
+    )
+    .join('')
+}
+
+function renderShiftHistoryTable(data: BootstrapData) {
+  const tableBody = document.querySelector<HTMLTableSectionElement>('#shift-history-table tbody')
+
+  if (!tableBody) {
+    return
+  }
+
+  if (data.shiftHistory.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">Todavia no hay historial de turnos registrado.</td></tr>'
+    return
+  }
+
+  tableBody.innerHTML = data.shiftHistory
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.fecha)}</td>
+          <td>
+            <strong>${escapeHtml(item.trabajador_nombre)}</strong>
+            <small>${escapeHtml(item.cargo ?? 'Sin cargo')}</small>
+          </td>
+          <td><span class="badge badge--soft">${escapeHtml(item.turno_nombre)}</span></td>
+          <td>${escapeHtml(formatTime(item.hora_entrada))}</td>
+          <td>${escapeHtml(formatTime(item.hora_salida))}</td>
+          <td><span class="badge ${item.estado === 'EN_TURNO' ? 'badge--success' : 'badge--muted'}">${item.estado === 'EN_TURNO' ? 'En turno' : 'Completado'}</span></td>
+        </tr>
+      `,
+    )
     .join('')
 }
 
@@ -911,6 +1052,7 @@ function buildInventoryAuditPayload(data: BootstrapData): InventoryAuditInput {
     }),
     observacion: 'Cierre de inventario desde checklist',
   }
+}
 
 }
 
@@ -927,7 +1069,7 @@ function renderRolesTable(data: BootstrapData) {
       <td>${escapeHtml(role.descripcion ?? 'Sin descripción')}</td>
       <td><span class="badge ${role.estado ? 'badge--success' : 'badge--muted'}">${role.estado ? 'Activo' : 'Inactivo'}</span></td>
       <td>
-        <button class="button button--small" type="button" data-role-edit="${role.id_rol}">Editar</button>
+        ${hasPermission('GESTIONAR_ROLES') ? `<button class="button button--small" type="button" data-role-edit="${role.id_rol}">Editar</button>` : ''}
       </td>
     </tr>
   `).join('')
@@ -957,7 +1099,7 @@ function renderWorkersTable(data: BootstrapData) {
       <td>${worker.id_usuario ? '<span class="badge badge--soft">Asignado</span>' : '<span class="badge badge--muted">Sin usuario</span>'}</td>
       <td><span class="badge ${worker.estado === 'activo' ? 'badge--success' : 'badge--muted'}">${escapeHtml(worker.estado)}</span></td>
       <td>
-        <button class="button button--small" type="button" data-worker-edit="${worker.id_trabajador}">Editar</button>
+        ${hasPermission('GESTIONAR_TRABAJADORES') ? `<button class="button button--small" type="button" data-worker-edit="${worker.id_trabajador}">Editar</button>` : ''}
       </td>
     </tr>
   `).join('')
@@ -1620,6 +1762,7 @@ async function refresh() {
   bootstrapData = await window.inventoryApi.getBootstrapData()
   renderMetricCards(bootstrapData)
   renderAppInfo(bootstrapData)
+  applyAccessControl()
   renderProductFormOptions(bootstrapData)
   renderWorkerRoleSelect(bootstrapData)
   renderPermissionsCheckboxes(bootstrapData)
@@ -1629,6 +1772,8 @@ async function refresh() {
   renderAttendanceState(bootstrapData)
   renderAttendanceTable(bootstrapData)
   renderWorkHoursTable(bootstrapData)
+  renderShiftRotationTable(bootstrapData)
+  renderShiftHistoryTable(bootstrapData)
   renderRolesTable(bootstrapData)
   renderWorkersTable(bootstrapData)
   renderAuditTable(bootstrapData)
@@ -1668,6 +1813,11 @@ async function bootstrap() {
   })
 
   document.querySelector<HTMLButtonElement>('#inventory-mode-toggle')?.addEventListener('click', async () => {
+    if (!hasPermission('GESTIONAR_INVENTARIO')) {
+      setStatus('inventory-status', 'No tienes permiso para cerrar inventario.', 'error')
+      return
+    }
+
     if (!bootstrapData) {
       return
     }
@@ -1686,6 +1836,11 @@ async function bootstrap() {
   })
 
   document.querySelector<HTMLButtonElement>('#inventory-close')?.addEventListener('click', async () => {
+    if (!hasPermission('GESTIONAR_INVENTARIO')) {
+      setStatus('inventory-audit-status', 'No tienes permiso para cerrar inventario.', 'error')
+      return
+    }
+
     if (!bootstrapData) {
       return
     }
@@ -1702,6 +1857,11 @@ async function bootstrap() {
 
   productForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('GESTIONAR_INVENTARIO')) {
+      setStatus('inventory-status', 'No tienes permiso para guardar productos.', 'error')
+      return
+    }
+
     try {
       const formData = new FormData(productForm)
       const payload: ProductFormInput = {
@@ -1731,6 +1891,10 @@ async function bootstrap() {
 
   movementForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('REGISTRAR_MOVIMIENTOS')) {
+      setStatus('movement-status', 'No tienes permiso para registrar movimientos.', 'error')
+      return
+    }
 
     try {
       const formData = new FormData(movementForm)
@@ -1809,100 +1973,102 @@ async function bootstrap() {
     setStatus('sale-status', 'Carrito limpio.', 'info')
   })
 
-  if (saleForm) {
-    saleForm.onsubmit = async (event) => {
-      event.preventDefault()
+  saleForm?.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    if (!hasPermission('REGISTRAR_VENTAS')) {
+      setStatus('sale-status', 'No tienes permiso para registrar ventas.', 'error')
+      return
+    }
 
-      if (!bootstrapData) {
-        return
+    if (!bootstrapData) {
+      return
+    }
+
+    const formData = new FormData(saleForm)
+    const subtotal = getSaleSubtotal()
+
+    const discountManual = String(formData.get('descuento_total') ?? '').trim()
+      ? Number(formData.get('descuento_total'))
+      : 0
+
+    if (saleCart.size === 0) {
+      setStatus('sale-status', 'Agrega al menos un producto antes de confirmar la venta.', 'error')
+      return
+    }
+
+    if (!Number.isFinite(discountManual) || discountManual < 0) {
+      setStatus('sale-status', 'El descuento manual no puede ser negativo.', 'error')
+      return
+    }
+
+    const idClienteVal = formData.get('id_cliente') ? Number(formData.get('id_cliente')) : 0
+    const idCliente = idClienteVal > 0 ? idClienteVal : null
+
+    const idVendedorVal = Number(formData.get('id_vendedor') ?? 0)
+    if (!idVendedorVal) {
+      setStatus('sale-status', 'Debe seleccionar un vendedor.', 'error')
+      return
+    }
+
+    const idTurnoVal = formData.get('id_turno') ? Number(formData.get('id_turno')) : 0
+    const idTurno = idTurnoVal > 0 ? idTurnoVal : null
+
+    const idMoneda = Number(formData.get('id_moneda') ?? 1)
+    const tasaCambio = Number(formData.get('tasa_cambio_aplicada') ?? 1)
+
+    // Distributed general discount manual share
+    const details = Array.from(saleCart.values()).map((item) => {
+      const subtotalLine = roundMoney(Number(item.product.precio_venta) * item.cantidad)
+      const lineManualShare = subtotal === 0 ? 0 : roundMoney((subtotalLine / subtotal) * discountManual)
+      const lineManualShareUnit = roundMoney(lineManualShare / item.cantidad)
+      const totalDescuentoUnitario = roundMoney((item.descuento_unitario ?? 0) + lineManualShareUnit)
+
+      return {
+        id_producto: item.product.id_producto,
+        cantidad: item.cantidad,
+        descuento_unitario: totalDescuentoUnitario,
+        id_descuento: null as number | null
       }
+    })
 
-      const formData = new FormData(saleForm)
-      const subtotal = getSaleSubtotal()
+    const payload: SaleFormInput = {
+      id_cliente: idCliente,
+      id_vendedor: idVendedorVal,
+      id_turno: idTurno,
+      id_moneda: idMoneda,
+      tasa_cambio_aplicada: tasaCambio,
+      observacion: String(formData.get('observacion') ?? '').trim() || null,
+      detalles: details,
+      pagos: salePayments.map(pago => ({
+        id_metodo_pago: pago.id_metodo_pago,
+        id_moneda: pago.id_moneda,
+        monto: pago.monto,
+        referencia_pago: pago.referencia_pago
+      }))
+    }
+    const submitBtn = saleForm.querySelector<HTMLButtonElement>('button[type="submit"]')
+    if (submitBtn) {
+      submitBtn.disabled = true
+      submitBtn.textContent = 'Procesando...'
+    }
 
-      const discountManual = String(formData.get('descuento_total') ?? '').trim()
-        ? Number(formData.get('descuento_total'))
-        : 0
-
-      if (saleCart.size === 0) {
-        setStatus('sale-status', 'Agrega al menos un producto antes de confirmar la venta.', 'error')
-        return
-      }
-
-      if (!Number.isFinite(discountManual) || discountManual < 0) {
-        setStatus('sale-status', 'El descuento manual no puede ser negativo.', 'error')
-        return
-      }
-
-      const idClienteVal = formData.get('id_cliente') ? Number(formData.get('id_cliente')) : 0
-      const idCliente = idClienteVal > 0 ? idClienteVal : null
-
-      const idVendedorVal = Number(formData.get('id_vendedor') ?? 0)
-      if (!idVendedorVal) {
-        setStatus('sale-status', 'Debe seleccionar un vendedor.', 'error')
-        return
-      }
-
-      const idTurnoVal = formData.get('id_turno') ? Number(formData.get('id_turno')) : 0
-      const idTurno = idTurnoVal > 0 ? idTurnoVal : null
-
-      const idMoneda = Number(formData.get('id_moneda') ?? 1)
-      const tasaCambio = Number(formData.get('tasa_cambio_aplicada') ?? 1)
-
-      // Distributed general discount manual share
-      const details = Array.from(saleCart.values()).map((item) => {
-        const subtotalLine = roundMoney(Number(item.product.precio_venta) * item.cantidad)
-        const lineManualShare = subtotal === 0 ? 0 : roundMoney((subtotalLine / subtotal) * discountManual)
-        const lineManualShareUnit = roundMoney(lineManualShare / item.cantidad)
-        const totalDescuentoUnitario = roundMoney((item.descuento_unitario ?? 0) + lineManualShareUnit)
-
-        return {
-          id_producto: item.product.id_producto,
-          cantidad: item.cantidad,
-          descuento_unitario: totalDescuentoUnitario,
-          id_descuento: null as number | null
-        }
-      })
-
-      const payload: SaleFormInput = {
-        id_cliente: idCliente,
-        id_vendedor: idVendedorVal,
-        id_turno: idTurno,
-        id_moneda: idMoneda,
-        tasa_cambio_aplicada: tasaCambio,
-        observacion: String(formData.get('observacion') ?? '').trim() || null,
-        detalles: details,
-        pagos: salePayments.map(pago => ({
-          id_metodo_pago: pago.id_metodo_pago,
-          id_moneda: pago.id_moneda,
-          monto: pago.monto,
-          referencia_pago: pago.referencia_pago
-        }))
-      }
-      const submitBtn = saleForm.querySelector<HTMLButtonElement>('button[type="submit"]')
+    try {
+      await window.inventoryApi.createSale(payload)
+      setStatus('sale-status', 'Venta registrada correctamente.', 'success')
+      saleCart.clear()
+      salePayments.length = 0
+      saleForm.reset()
+      renderSalePayments()
+      await refresh()
+    } catch (error) {
+      setStatus('sale-status', getFriendlyErrorMessage(error, 'No se pudo registrar la venta.'), 'error')
+    } finally {
       if (submitBtn) {
-        submitBtn.disabled = true
-        submitBtn.textContent = 'Procesando...'
-      }
-
-      try {
-        await window.inventoryApi.createSale(payload)
-        setStatus('sale-status', 'Venta registrada correctamente.', 'success')
-        saleCart.clear()
-        salePayments.length = 0
-        saleForm.reset()
-        renderSalePayments()
-        await refresh()
-      } catch (error) {
-        setStatus('sale-status', getFriendlyErrorMessage(error, 'No se pudo registrar la venta.'), 'error')
-      } finally {
-        if (submitBtn) {
-          submitBtn.disabled = false
-          submitBtn.textContent = 'Confirmar venta'
-        }
+        submitBtn.disabled = false
+        submitBtn.textContent = 'Confirmar venta'
       }
     }
-  }
+  })
 
   attendanceForm?.querySelectorAll<HTMLButtonElement>('[data-attendance-action]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -1918,10 +2084,16 @@ async function bootstrap() {
 
   attendanceForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('REGISTRAR_ASISTENCIAS')) {
+      setStatus('attendance-status', 'No tienes permiso para registrar asistencias.', 'error')
+      return
+    }
 
     try {
       const formData = new FormData(attendanceForm)
-      const workerId = readRequiredId(formData, 'id_trabajador', 'El trabajador')
+      const workerId = !currentUser?.isAdminLike && currentUser?.id_trabajador
+        ? currentUser.id_trabajador
+        : readRequiredId(formData, 'id_trabajador', 'El trabajador')
       const selectedShiftId = String(formData.get('id_turno') ?? '').trim()
         ? readRequiredId(formData, 'id_turno', 'El turno')
         : 0
@@ -1965,6 +2137,11 @@ async function bootstrap() {
   })
   roleForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('GESTIONAR_ROLES')) {
+      setStatus('role-status', 'No tienes permiso para guardar roles.', 'error')
+      return
+    }
+
     const formData = new FormData(roleForm)
     const checkedPermisos = Array.from(roleForm.querySelectorAll<HTMLInputElement>('input[name="permisos[]"]:checked')).map(cb => Number(cb.value))
     try {
@@ -1989,6 +2166,11 @@ async function bootstrap() {
   })
   workerForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!hasPermission('GESTIONAR_TRABAJADORES')) {
+      setStatus('worker-status', 'No tienes permiso para guardar trabajadores.', 'error')
+      return
+    }
+
     const formData = new FormData(workerForm)
     try {
       await window.inventoryApi.saveWorker({
@@ -2007,24 +2189,6 @@ async function bootstrap() {
       await refresh()
     } catch (error) {
       setStatus('worker-status', error instanceof Error ? error.message : 'Error al guardar.', 'error')
-    }
-  })
-
-  document.querySelector<HTMLButtonElement>('#btn-entrada')?.addEventListener('click', async () => {
-    try {
-      await window.inventoryApi.recordAttendance({ tipo: 'ENTRADA' })
-      setStatus('attendance-status', 'Entrada registrada exitosamente.', 'success')
-    } catch (err) {
-      setStatus('attendance-status', err instanceof Error ? err.message : 'Error al registrar', 'error')
-    }
-  })
-  
-  document.querySelector<HTMLButtonElement>('#btn-salida')?.addEventListener('click', async () => {
-    try {
-      await window.inventoryApi.recordAttendance({ tipo: 'SALIDA' })
-      setStatus('attendance-status', 'Salida registrada exitosamente.', 'success')
-    } catch (err) {
-      setStatus('attendance-status', err instanceof Error ? err.message : 'Error al registrar', 'error')
     }
   })
 

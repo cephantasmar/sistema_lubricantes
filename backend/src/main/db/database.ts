@@ -61,6 +61,7 @@ function seedDatabase(databaseInstance: Database.Database) {
     "UPDATE turnos SET nombre = 'Mañana' WHERE id_turno = 1",
     "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (2, 'Tarde', '14:00', '18:00', 'Turno de cierre', 1)",
     "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (3, 'Completo', '08:00', '18:00', 'Jornada completa', 1)",
+    "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (4, 'Noche', '18:00', '22:00', 'Turno nocturno', 1)",
     `INSERT OR IGNORE INTO usuarios (id_usuario, username, email, password_hash, estado, ultimo_acceso, creado_en, actualizado_en) VALUES (1, 'system', 'system@local', 'system', 'activo', NULL, '${now}', NULL)`,
     `INSERT OR IGNORE INTO usuario_rol (id_usuario, id_rol) VALUES (1, 1)`,
     `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (1, 1, '00000000', 'Sistema', 'Operador', NULL, NULL, '${todayDisplaySql()}', NULL, 'Sistema', 0, 'activo', '${now}', NULL)`,
