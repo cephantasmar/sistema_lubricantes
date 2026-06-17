@@ -25,6 +25,13 @@ async function createWindow() {
     },
   })
 
+  mainWindow.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
+    return permission === 'geolocation'
+  })
+  mainWindow.webContents.session.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === 'geolocation')
+  })
+
   if (import.meta.env.DEV) {
     await mainWindow.loadURL(devServerUrl)
   } else {

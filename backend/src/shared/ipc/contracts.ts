@@ -57,6 +57,7 @@ export type SaleRow = {
   id_venta: number
   numero_factura: string
   fecha_venta: string
+  cliente_nombre: string
   productos_diferentes: number
   cantidad_total: number
   subtotal: number
@@ -124,6 +125,8 @@ export type ShiftRow = {
   hora_inicio: string
   hora_fin: string
   descripcion: string | null
+  estado?: boolean | number
+  registros_asociados?: number
 }
 
 export type AttendanceRow = {
@@ -224,6 +227,25 @@ export type SaleFormInput = {
   pagos: PaymentInput[]
 }
 
+export type ClientFormInput = {
+  id_cliente?: number | null
+  nombre: string
+  documento: string
+  telefono?: string | null
+  email?: string | null
+  direccion?: string | null
+}
+
+export type ClientRow = {
+  id_cliente: number
+  nombre: string
+  documento: string
+  telefono: string | null
+  email: string | null
+  direccion: string | null
+  creado_en: string
+}
+
 export type SaleDetailRow = {
   id_producto: number
   codigo: string
@@ -248,6 +270,8 @@ export type SaleFullDetail = {
   numero_factura: string
   fecha_venta: string
   cliente_nombre: string | null
+  cliente_documento: string | null
+  cliente_telefono: string | null
   vendedor_nombre: string
   turno_nombre: string | null
   subtotal: number
@@ -320,6 +344,15 @@ export type WorkerFormInput = {
   id_rol?: number | null
 }
 
+export type ShiftFormInput = {
+  id_turno?: number | null
+  nombre: string
+  hora_inicio: string
+  hora_fin: string
+  descripcion?: string | null
+  estado: boolean
+}
+
 export type AttendanceInput = {
   tipo: 'ENTRADA' | 'SALIDA'
 }
@@ -341,15 +374,18 @@ export type BootstrapData = {
     lowStockProducts: number
     totalMovements: number
     totalSales: number
+    totalSalesAmount: number
     activeAttendances: number
   }
   products: ProductRow[]
   movements: MovementRow[]
   sales: SaleRow[]
+  clients: ClientRow[]
   attendances: AttendanceRow[]
   workHoursSummary: WorkHoursSummaryRow[]
   shiftHistory: ShiftHistoryRow[]
   shiftRotationSummary: ShiftRotationSummaryRow[]
+  shifts: ShiftRow[]
   roles: RoleRow[]
   workers: WorkerRow[]
   auditLogs: AuditLogRow[]
