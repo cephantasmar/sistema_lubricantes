@@ -1500,45 +1500,245 @@ function getOpenAttendance(database: Database.Database, workerId: number) {
     .get(workerId) as { id_asistencia: number; observacion: string | null } | undefined
 }
 
+function assertReportDate(value: string, fieldName: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${fieldName} debe tener formato YYYY-MM-DD.`)
+  }
+}
+
+function normalizeOptionalPositiveId(value: number | null | undefined) {
+  if (value === null || value === undefined || value === 0) {
+    return null
+  }
+
+  const numericValue = Number(value)
+  return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : null
+}
+
+function normalizeReportStatus(value: string | null | undefined) {
+  const status = normalizeText(value)?.toUpperCase()
+  return status ?? null
+}
+
+type ReportWhereOptions = {
+  includeStatusFilter: boolean
+  excludeCancelledWhenNoStatus: boolean
+}
+
+function buildSalesReportWhere(input: SalesReportInput, options: ReportWhereOptions) {
+  const whereParts = ['DATE(v.fecha_venta) BETWEEN ? AND ?']
+  const params: unknown[] = [input.startDate, input.endDate]
+  const vendedorId = normalizeOptionalPositiveId(input.vendedorId)
+  const turnoId = normalizeOptionalPositiveId(input.turnoId)
+  const monedaId = normalizeOptionalPositiveId(input.monedaId)
+  const status = normalizeReportStatus(input.estado)
+
+  if (vendedorId !== null) {
+    whereParts.push('v.id_vendedor = ?')
+    params.push(vendedorId)
+  }
+
+  if (turnoId !== null) {
+    whereParts.push('v.id_turno = ?')
+    params.push(turnoId)
+  }
+
+  if (monedaId !== null) {
+    whereParts.push('v.id_moneda = ?')
+    params.push(monedaId)
+  }
+
+  if (options.includeStatusFilter && status && status !== 'TODOS') {
+    whereParts.push('UPPER(v.estado) = ?')
+    params.push(status)
+  } else if (options.excludeCancelledWhenNoStatus && status !== 'TODOS') {
+    whereParts.push("UPPER(v.estado) != 'ANULADA'")
+  }
+
+  return {
+    whereSql: whereParts.join(' AND '),
+    params,
+  }
+}
+
+const REPORT_DETAIL_AGG_SQL = `
+  SELECT
+    id_venta,
+    COUNT(*) AS productos_count,
+    SUM(cantidad) AS cantidad_total,
+    SUM(cantidad * precio_costo_unitario) AS costo_total,
+    SUM(total_linea) AS total_lineas
+  FROM venta_detalles
+  GROUP BY id_venta
+`
+
+const REPORT_PAYMENT_AGG_SQL = `
+  SELECT
+    pv.id_venta,
+    SUM(
+      CASE
+        WHEN pm.codigo = sm.codigo THEN pv.monto
+        WHEN pm.codigo = 'BOB' THEN pv.monto / COALESCE(NULLIF(vp.tasa_cambio_aplicada, 0), 1)
+        WHEN sm.codigo = 'BOB' THEN pv.monto * COALESCE(NULLIF(tcp.valor, 0), 1)
+        ELSE (pv.monto * COALESCE(NULLIF(tcp.valor, 0), 1)) / COALESCE(NULLIF(vp.tasa_cambio_aplicada, 0), 1)
+      END
+    ) AS total_recibido_venta,
+    COUNT(*) AS pagos_count,
+    GROUP_CONCAT(DISTINCT mp.nombre) AS metodos_pago
+  FROM pagos_venta pv
+  INNER JOIN ventas vp ON vp.id_venta = pv.id_venta
+  INNER JOIN monedas pm ON pm.id_moneda = pv.id_moneda
+  INNER JOIN monedas sm ON sm.id_moneda = vp.id_moneda
+  INNER JOIN metodos_pago mp ON mp.id_metodo = pv.id_metodo_pago
+  LEFT JOIN (
+    SELECT tc1.id_moneda, tc1.valor
+    FROM tipo_cambio tc1
+    INNER JOIN (
+      SELECT id_moneda, MAX(registrado_en) AS registrado_en
+      FROM tipo_cambio
+      GROUP BY id_moneda
+    ) latest ON latest.id_moneda = tc1.id_moneda AND latest.registrado_en = tc1.registrado_en
+  ) tcp ON tcp.id_moneda = pv.id_moneda
+  GROUP BY pv.id_venta
+`
+
+type ProfitSqlRow = {
+  id_venta: number
+  numero_factura: string
+  fecha_venta: string
+  vendedor: string
+  cliente: string
+  turno: string | null
+  moneda: string
+  productos_count: number | null
+  cantidad_total: number | null
+  subtotal: number
+  descuento: number
+  total: number
+  costo: number | null
+  ganancia: number | null
+  margen: number | null
+  pagos_recibidos: number | null
+  saldo_pendiente: number | null
+  cambio: number | null
+  metodos_pago: string | null
+  estado: string
+}
+
+type CashFlowSqlRow = {
+  metodo_pago: string
+  moneda: string
+  total_recibido: number | null
+  transacciones_count: number
+  ventas_count: number
+  referencias_count: number
+  sin_referencia_count: number
+}
+
+type StatusSqlRow = {
+  estado: string
+  cantidad: number
+}
+
+type BrandChartSqlRow = {
+  marca: string
+  ventas_count: number
+  unidades: number | null
+  total_vendido: number | null
+  total_ganancia: number | null
+  margen: number | null
+}
+
+type ShiftChartSqlRow = {
+  turno: string
+  ventas_count: number
+  total_vendido: number | null
+  total_ganancia: number | null
+  margen: number | null
+}
+
+type SellerChartSqlRow = {
+  vendedor: string
+  ventas_count: number
+  total_vendido: number | null
+  total_ganancia: number | null
+  margen: number | null
+}
+
+type DailyChartSqlRow = {
+  fecha: string
+  total_vendido: number | null
+  total_costo: number | null
+  total_ganancia: number | null
+  ventas_count: number
+}
+
 export function getSalesReport(database: Database.Database, input: SalesReportInput): SalesReportData {
   const access = getCurrentUserAccess(database)
   if (!access.isAdminLike) {
     throw new Error('No tienes permiso para consultar reportes administrativos.')
   }
 
-  const { startDate, endDate } = input
+  assertReportDate(input.startDate, 'La fecha inicial')
+  assertReportDate(input.endDate, 'La fecha final')
+  if (input.startDate > input.endDate) {
+    throw new Error('La fecha inicial no puede ser mayor que la fecha final.')
+  }
 
-  // 1. Profit report (SCRUM-16)
-  const profitRows = database.prepare(`
-    SELECT
-      v.id_venta,
-      v.numero_factura,
-      v.fecha_venta,
-      t.nombres || ' ' || t.apellidos AS vendedor,
-      COALESCE(c.nombre, 'Consumidor final') AS cliente,
-      v.subtotal,
-      v.descuento_total AS descuento,
-      v.total,
-      COALESCE(vd.costo_total, 0) AS costo,
-      v.total - COALESCE(vd.costo_total, 0) AS ganancia,
-      CASE 
-        WHEN v.total > 0 THEN ((v.total - COALESCE(vd.costo_total, 0)) / v.total) * 100
-        ELSE 0
-      END AS margen,
-      v.estado
-    FROM ventas v
-    INNER JOIN trabajadores t ON t.id_trabajador = v.id_vendedor
-    LEFT JOIN clientes c ON c.id_cliente = v.id_cliente
-    LEFT JOIN (
-      SELECT 
-        id_venta,
-        SUM(cantidad * precio_costo_unitario) AS costo_total
-      FROM venta_detalles
-      GROUP BY id_venta
-    ) vd ON vd.id_venta = v.id_venta
-    WHERE DATE(v.fecha_venta) BETWEEN ? AND ? AND v.estado != 'ANULADA'
-    ORDER BY v.fecha_venta DESC, v.id_venta DESC
-  `).all(startDate, endDate) as any[]
+  const validWhere = buildSalesReportWhere(input, {
+    includeStatusFilter: true,
+    excludeCancelledWhenNoStatus: true,
+  })
+  const statusWhere = buildSalesReportWhere(input, {
+    includeStatusFilter: false,
+    excludeCancelledWhenNoStatus: false,
+  })
+
+  const profitRows = database
+    .prepare(
+      `
+      SELECT
+        v.id_venta,
+        v.numero_factura,
+        v.fecha_venta,
+        t.nombres || ' ' || t.apellidos AS vendedor,
+        COALESCE(c.nombre, 'Consumidor final') AS cliente,
+        COALESCE(tu.nombre, 'Sin turno') AS turno,
+        mo.codigo AS moneda,
+        COALESCE(vd.productos_count, 0) AS productos_count,
+        COALESCE(vd.cantidad_total, 0) AS cantidad_total,
+        v.subtotal,
+        v.descuento_total AS descuento,
+        v.total,
+        COALESCE(vd.costo_total, 0) AS costo,
+        v.total - COALESCE(vd.costo_total, 0) AS ganancia,
+        CASE
+          WHEN v.total > 0 THEN ((v.total - COALESCE(vd.costo_total, 0)) / v.total) * 100
+          ELSE 0
+        END AS margen,
+        COALESCE(pay.total_recibido_venta, 0) AS pagos_recibidos,
+        CASE
+          WHEN v.total > COALESCE(pay.total_recibido_venta, 0) THEN v.total - COALESCE(pay.total_recibido_venta, 0)
+          ELSE 0
+        END AS saldo_pendiente,
+        CASE
+          WHEN COALESCE(pay.total_recibido_venta, 0) > v.total THEN COALESCE(pay.total_recibido_venta, 0) - v.total
+          ELSE 0
+        END AS cambio,
+        COALESCE(pay.metodos_pago, 'Sin pago') AS metodos_pago,
+        v.estado
+      FROM ventas v
+      INNER JOIN trabajadores t ON t.id_trabajador = v.id_vendedor
+      INNER JOIN monedas mo ON mo.id_moneda = v.id_moneda
+      LEFT JOIN clientes c ON c.id_cliente = v.id_cliente
+      LEFT JOIN turnos tu ON tu.id_turno = v.id_turno
+      LEFT JOIN (${REPORT_DETAIL_AGG_SQL}) vd ON vd.id_venta = v.id_venta
+      LEFT JOIN (${REPORT_PAYMENT_AGG_SQL}) pay ON pay.id_venta = v.id_venta
+      WHERE ${validWhere.whereSql}
+      ORDER BY v.fecha_venta DESC, v.id_venta DESC
+    `,
+    )
+    .all(...validWhere.params) as ProfitSqlRow[]
 
   const profitReport = profitRows.map((r) => ({
     id_venta: Number(r.id_venta),
@@ -1546,43 +1746,102 @@ export function getSalesReport(database: Database.Database, input: SalesReportIn
     fecha_venta: String(r.fecha_venta),
     vendedor: String(r.vendedor),
     cliente: String(r.cliente),
-    subtotal: Number(r.subtotal),
-    descuento: Number(r.descuento),
-    total: Number(r.total),
-    costo: Number(r.costo),
-    ganancia: Number(r.ganancia),
-    margen: Number(r.margen),
+    turno: String(r.turno ?? 'Sin turno'),
+    moneda: String(r.moneda),
+    productos_count: Number(r.productos_count ?? 0),
+    cantidad_total: roundMoney(Number(r.cantidad_total ?? 0)),
+    subtotal: roundMoney(Number(r.subtotal)),
+    descuento: roundMoney(Number(r.descuento)),
+    total: roundMoney(Number(r.total)),
+    costo: roundMoney(Number(r.costo ?? 0)),
+    ganancia: roundMoney(Number(r.ganancia ?? 0)),
+    margen: roundMoney(Number(r.margen ?? 0)),
+    pagos_recibidos: roundMoney(Number(r.pagos_recibidos ?? 0)),
+    saldo_pendiente: roundMoney(Number(r.saldo_pendiente ?? 0)),
     estado: String(r.estado),
   }))
 
-  // 2. Cash flow report (SCRUM-18)
-  const cashFlowRows = database.prepare(`
-    SELECT
-      mp.nombre AS metodo_pago,
-      SUM(pv.monto) AS total_recibido,
-      COUNT(pv.referencia_pago) AS referencias_count
-    FROM pagos_venta pv
-    INNER JOIN metodos_pago mp ON mp.id_metodo = pv.id_metodo_pago
-    INNER JOIN ventas v ON v.id_venta = pv.id_venta
-    WHERE DATE(v.fecha_venta) BETWEEN ? AND ? AND v.estado != 'ANULADA'
-    GROUP BY pv.id_metodo_pago
-  `).all(startDate, endDate) as any[]
+  const cashFlowBySale = profitRows.map((r) => ({
+    id_venta: Number(r.id_venta),
+    numero_factura: String(r.numero_factura),
+    fecha_venta: String(r.fecha_venta),
+    cliente: String(r.cliente),
+    vendedor: String(r.vendedor),
+    turno: String(r.turno ?? 'Sin turno'),
+    estado: String(r.estado),
+    moneda: String(r.moneda),
+    total_vendido: roundMoney(Number(r.total)),
+    total_recibido: roundMoney(Number(r.pagos_recibidos ?? 0)),
+    saldo_pendiente: roundMoney(Number(r.saldo_pendiente ?? 0)),
+    cambio: roundMoney(Number(r.cambio ?? 0)),
+    metodos_pago: String(r.metodos_pago ?? 'Sin pago'),
+  }))
+
+  const cashFlowRows = database
+    .prepare(
+      `
+      SELECT
+        mp.nombre AS metodo_pago,
+        mo.codigo AS moneda,
+        SUM(pv.monto) AS total_recibido,
+        COUNT(*) AS transacciones_count,
+        COUNT(DISTINCT pv.id_venta) AS ventas_count,
+        SUM(CASE WHEN pv.referencia_pago IS NOT NULL AND TRIM(pv.referencia_pago) != '' THEN 1 ELSE 0 END) AS referencias_count,
+        SUM(CASE WHEN pv.referencia_pago IS NULL OR TRIM(pv.referencia_pago) = '' THEN 1 ELSE 0 END) AS sin_referencia_count
+      FROM pagos_venta pv
+      INNER JOIN metodos_pago mp ON mp.id_metodo = pv.id_metodo_pago
+      INNER JOIN monedas mo ON mo.id_moneda = pv.id_moneda
+      INNER JOIN ventas v ON v.id_venta = pv.id_venta
+      WHERE ${validWhere.whereSql}
+      GROUP BY pv.id_metodo_pago, pv.id_moneda
+      ORDER BY total_recibido DESC
+    `,
+    )
+    .all(...validWhere.params) as CashFlowSqlRow[]
 
   const cashFlowReport = cashFlowRows.map((r) => ({
     metodo_pago: String(r.metodo_pago),
-    total_recibido: Number(r.total_recibido),
+    moneda: String(r.moneda),
+    total_recibido: roundMoney(Number(r.total_recibido ?? 0)),
+    transacciones_count: Number(r.transacciones_count),
+    ventas_count: Number(r.ventas_count),
     referencias_count: Number(r.referencias_count),
+    sin_referencia_count: Number(r.sin_referencia_count),
   }))
 
-  // 3. KPIs
+  const statusRows = database
+    .prepare(
+      `
+      SELECT UPPER(v.estado) AS estado, COUNT(*) AS cantidad
+      FROM ventas v
+      WHERE ${statusWhere.whereSql}
+      GROUP BY UPPER(v.estado)
+    `,
+    )
+    .all(...statusWhere.params) as StatusSqlRow[]
+
+  const statusCounts = statusRows.reduce<Record<string, number>>((acc, row) => {
+    acc[String(row.estado)] = Number(row.cantidad)
+    return acc
+  }, {})
+
   const totalVendido = roundMoney(profitReport.reduce((sum, r) => sum + r.total, 0))
   const totalCosto = roundMoney(profitReport.reduce((sum, r) => sum + r.costo, 0))
-  const totalGanancia = roundMoney(totalVendido - totalCosto)
+  const totalGanancia = roundMoney(profitReport.reduce((sum, r) => sum + r.ganancia, 0))
   const totalDescuentos = roundMoney(profitReport.reduce((sum, r) => sum + r.descuento, 0))
   const cantidadVentas = profitReport.length
-  
-  const totalCobrado = roundMoney(cashFlowReport.reduce((sum, r) => sum + r.total_recibido, 0))
-  const saldoPendiente = roundMoney(totalVendido > totalCobrado ? totalVendido - totalCobrado : 0)
+  const totalCobrado = roundMoney(cashFlowBySale.reduce((sum, r) => sum + r.total_recibido, 0))
+  const saldoPendiente = roundMoney(cashFlowBySale.reduce((sum, r) => sum + r.saldo_pendiente, 0))
+  const ticketPromedio = cantidadVentas > 0 ? roundMoney(totalVendido / cantidadVentas) : 0
+  const margenPromedio = totalVendido > 0 ? roundMoney((totalGanancia / totalVendido) * 100) : 0
+  const ventaMasRentable = profitReport.reduce<(typeof profitReport)[number] | null>(
+    (best, row) => (!best || row.ganancia > best.ganancia ? row : best),
+    null,
+  )
+  const margenMasBajo = profitReport.reduce<(typeof profitReport)[number] | null>(
+    (lowest, row) => (!lowest || row.margen < lowest.margen ? row : lowest),
+    null,
+  )
 
   const kpis = {
     totalVendido,
@@ -1592,78 +1851,149 @@ export function getSalesReport(database: Database.Database, input: SalesReportIn
     totalDescuentos,
     cantidadVentas,
     saldoPendiente,
+    ticketPromedio,
+    margenPromedio,
+    ventasCompletadas: Number(statusCounts.COMPLETADA ?? 0),
+    ventasPendientes: Number(statusCounts.PENDIENTE ?? 0),
+    ventasAnuladas: Number(statusCounts.ANULADA ?? 0),
+    pagosRegistrados: cashFlowReport.reduce((sum, r) => sum + r.transacciones_count, 0),
+    metodosPagoCount: new Set(cashFlowReport.map((r) => r.metodo_pago)).size,
+    ventaMasRentable: ventaMasRentable
+      ? { label: ventaMasRentable.numero_factura, value: roundMoney(ventaMasRentable.ganancia) }
+      : null,
+    margenMasBajo: margenMasBajo ? { label: margenMasBajo.numero_factura, value: roundMoney(margenMasBajo.margen) } : null,
   }
 
-  // 4. Charts data (SCRUM-17)
-  const brandRows = database.prepare(`
-    SELECT
-      m.nombre AS marca,
-      COUNT(DISTINCT v.id_venta) AS ventas_count,
-      SUM(vd.total_linea) AS total_vendido
-    FROM venta_detalles vd
-    INNER JOIN ventas v ON v.id_venta = vd.id_venta
-    INNER JOIN productos p ON p.id_producto = vd.id_producto
-    INNER JOIN marcas m ON m.id_marca = p.id_marca
-    WHERE DATE(v.fecha_venta) BETWEEN ? AND ? AND v.estado != 'ANULADA'
-    GROUP BY m.id_marca
-    ORDER BY total_vendido DESC
-  `).all(startDate, endDate) as any[]
+  const brandRows = database
+    .prepare(
+      `
+      SELECT
+        m.nombre AS marca,
+        COUNT(DISTINCT v.id_venta) AS ventas_count,
+        SUM(vd.cantidad) AS unidades,
+        SUM(vd.total_linea) AS total_vendido,
+        SUM(vd.total_linea - (vd.cantidad * vd.precio_costo_unitario)) AS total_ganancia,
+        CASE
+          WHEN SUM(vd.total_linea) > 0 THEN (SUM(vd.total_linea - (vd.cantidad * vd.precio_costo_unitario)) / SUM(vd.total_linea)) * 100
+          ELSE 0
+        END AS margen
+      FROM venta_detalles vd
+      INNER JOIN ventas v ON v.id_venta = vd.id_venta
+      INNER JOIN productos p ON p.id_producto = vd.id_producto
+      INNER JOIN marcas m ON m.id_marca = p.id_marca
+      WHERE ${validWhere.whereSql}
+      GROUP BY m.id_marca
+      ORDER BY total_vendido DESC
+      LIMIT 8
+    `,
+    )
+    .all(...validWhere.params) as BrandChartSqlRow[]
 
   const chartsBrands = brandRows.map((r) => ({
     marca: String(r.marca),
     ventas_count: Number(r.ventas_count),
-    total_vendido: Number(r.total_vendido),
+    unidades: roundMoney(Number(r.unidades ?? 0)),
+    total_vendido: roundMoney(Number(r.total_vendido ?? 0)),
+    total_ganancia: roundMoney(Number(r.total_ganancia ?? 0)),
+    margen: roundMoney(Number(r.margen ?? 0)),
   }))
 
-  const shiftRows = database.prepare(`
-    SELECT
-      COALESCE(tu.nombre, 'Sin turno') AS turno,
-      COUNT(v.id_venta) AS ventas_count,
-      SUM(v.total) AS total_vendido
-    FROM ventas v
-    LEFT JOIN turnos tu ON tu.id_turno = v.id_turno
-    WHERE DATE(v.fecha_venta) BETWEEN ? AND ? AND v.estado != 'ANULADA'
-    GROUP BY v.id_turno
-    ORDER BY total_vendido DESC
-  `).all(startDate, endDate) as any[]
+  const shiftRows = database
+    .prepare(
+      `
+      SELECT
+        COALESCE(tu.nombre, 'Sin turno') AS turno,
+        COUNT(v.id_venta) AS ventas_count,
+        SUM(v.total) AS total_vendido,
+        SUM(v.total - COALESCE(vd.costo_total, 0)) AS total_ganancia,
+        CASE
+          WHEN SUM(v.total) > 0 THEN (SUM(v.total - COALESCE(vd.costo_total, 0)) / SUM(v.total)) * 100
+          ELSE 0
+        END AS margen
+      FROM ventas v
+      LEFT JOIN turnos tu ON tu.id_turno = v.id_turno
+      LEFT JOIN (${REPORT_DETAIL_AGG_SQL}) vd ON vd.id_venta = v.id_venta
+      WHERE ${validWhere.whereSql}
+      GROUP BY COALESCE(tu.nombre, 'Sin turno')
+      ORDER BY total_vendido DESC
+    `,
+    )
+    .all(...validWhere.params) as ShiftChartSqlRow[]
 
   const chartsShifts = shiftRows.map((r) => ({
     turno: String(r.turno),
     ventas_count: Number(r.ventas_count),
-    total_vendido: Number(r.total_vendido),
+    total_vendido: roundMoney(Number(r.total_vendido ?? 0)),
+    total_ganancia: roundMoney(Number(r.total_ganancia ?? 0)),
+    margen: roundMoney(Number(r.margen ?? 0)),
   }))
 
-  const dailyRows = database.prepare(`
-    SELECT
-      DATE(v.fecha_venta) AS fecha,
-      SUM(v.total) AS total_vendido,
-      SUM(v.total) - SUM(COALESCE(vd.costo_total, 0)) AS total_ganancia
-    FROM ventas v
-    LEFT JOIN (
-      SELECT 
-        id_venta,
-        SUM(cantidad * precio_costo_unitario) AS costo_total
-      FROM venta_detalles
-      GROUP BY id_venta
-    ) vd ON vd.id_venta = v.id_venta
-    WHERE DATE(v.fecha_venta) BETWEEN ? AND ? AND v.estado != 'ANULADA'
-    GROUP BY DATE(v.fecha_venta)
-    ORDER BY DATE(v.fecha_venta) ASC
-  `).all(startDate, endDate) as any[]
+  const sellerRows = database
+    .prepare(
+      `
+      SELECT
+        t.nombres || ' ' || t.apellidos AS vendedor,
+        COUNT(v.id_venta) AS ventas_count,
+        SUM(v.total) AS total_vendido,
+        SUM(v.total - COALESCE(vd.costo_total, 0)) AS total_ganancia,
+        CASE
+          WHEN SUM(v.total) > 0 THEN (SUM(v.total - COALESCE(vd.costo_total, 0)) / SUM(v.total)) * 100
+          ELSE 0
+        END AS margen
+      FROM ventas v
+      INNER JOIN trabajadores t ON t.id_trabajador = v.id_vendedor
+      LEFT JOIN (${REPORT_DETAIL_AGG_SQL}) vd ON vd.id_venta = v.id_venta
+      WHERE ${validWhere.whereSql}
+      GROUP BY v.id_vendedor
+      ORDER BY total_ganancia DESC
+      LIMIT 8
+    `,
+    )
+    .all(...validWhere.params) as SellerChartSqlRow[]
+
+  const chartsSellers = sellerRows.map((r) => ({
+    vendedor: String(r.vendedor),
+    ventas_count: Number(r.ventas_count),
+    total_vendido: roundMoney(Number(r.total_vendido ?? 0)),
+    total_ganancia: roundMoney(Number(r.total_ganancia ?? 0)),
+    margen: roundMoney(Number(r.margen ?? 0)),
+  }))
+
+  const dailyRows = database
+    .prepare(
+      `
+      SELECT
+        DATE(v.fecha_venta) AS fecha,
+        COUNT(v.id_venta) AS ventas_count,
+        SUM(v.total) AS total_vendido,
+        SUM(COALESCE(vd.costo_total, 0)) AS total_costo,
+        SUM(v.total - COALESCE(vd.costo_total, 0)) AS total_ganancia
+      FROM ventas v
+      LEFT JOIN (${REPORT_DETAIL_AGG_SQL}) vd ON vd.id_venta = v.id_venta
+      WHERE ${validWhere.whereSql}
+      GROUP BY DATE(v.fecha_venta)
+      ORDER BY DATE(v.fecha_venta) ASC
+    `,
+    )
+    .all(...validWhere.params) as DailyChartSqlRow[]
 
   const chartsDaily = dailyRows.map((r) => ({
     fecha: String(r.fecha),
-    total_vendido: Number(r.total_vendido),
-    total_ganancia: Number(r.total_ganancia),
+    total_vendido: roundMoney(Number(r.total_vendido ?? 0)),
+    total_costo: roundMoney(Number(r.total_costo ?? 0)),
+    total_ganancia: roundMoney(Number(r.total_ganancia ?? 0)),
+    ventas_count: Number(r.ventas_count),
   }))
 
   return {
     kpis,
     profitReport,
     cashFlowReport,
+    cashFlowBySale,
     charts: {
       brands: chartsBrands,
       shifts: chartsShifts,
+      sellers: chartsSellers,
       daily: chartsDaily,
     },
   }

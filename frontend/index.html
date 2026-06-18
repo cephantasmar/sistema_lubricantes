@@ -508,12 +508,33 @@
                       <span class="module-kicker">Caja</span>
                       <h2>Registrar venta</h2>
                     </div>
-                    <button class="button button--ghost" id="client-form-toggle" type="button">
-                      <i class="ti ti-user-plus"></i> Nuevo cliente
-                    </button>
+                    <div class="row-actions">
+                      <button class="button button--ghost" id="sale-advanced-toggle" type="button" aria-pressed="false">
+                        <i class="ti ti-adjustments-horizontal"></i> Opciones
+                      </button>
+                      <button class="button button--ghost" id="client-form-toggle" type="button">
+                        <i class="ti ti-user-plus"></i> Cliente
+                      </button>
+                    </div>
                   </div>
 
                   <p class="module-status" id="sale-status"></p>
+
+                  <div class="sale-guide" aria-label="Pasos de venta">
+                    <div class="sale-guide__step is-active" data-sale-step="buscar">
+                      <span>1</span>
+                      <strong>Buscar producto</strong>
+                    </div>
+                    <div class="sale-guide__step" data-sale-step="revisar">
+                      <span>2</span>
+                      <strong>Revisar carrito</strong>
+                    </div>
+                    <div class="sale-guide__step" data-sale-step="cobrar">
+                      <span>3</span>
+                      <strong>Cobrar y guardar</strong>
+                    </div>
+                    <p id="sale-next-action">Busca por codigo, nombre o marca para empezar.</p>
+                  </div>
 
                   <form id="client-form" class="client-quick-form" hidden>
                     <input name="id_cliente" type="hidden" />
@@ -556,7 +577,7 @@
                   </form>
 
                   <form id="sale-form" class="sale-form">
-                    <div class="sale-header-fields form-grid">
+                    <div class="sale-header-fields sale-advanced-section form-grid">
                       <div class="field client-picker">
                         <span>Cliente</span>
                         <div class="client-picker__search">
@@ -585,7 +606,8 @@
                     <div class="sale-product-search">
                       <label class="field">
                         <span>Buscar producto</span>
-                        <input id="sale-product-search" type="search" placeholder="Codigo, barra, nombre o marca" autocomplete="off" />
+                        <input id="sale-product-search" type="search" placeholder="Ej. 20W-50, filtro, codigo o marca" autocomplete="off" />
+                        <small>Escribe y presiona Enter. Si ves el producto en la lista, haz clic para agregarlo.</small>
                       </label>
 
                       <div class="product-results" id="sale-product-results"></div>
@@ -600,8 +622,8 @@
                             <th style="text-align: right;">Stock</th>
                             <th style="text-align: right; width: 100px;">Cantidad</th>
                             <th style="text-align: right;">Precio unitario</th>
-                            <th style="text-align: right; width: 100px;">Descuento</th>
-                            <th style="text-align: right;">Subtotal</th>
+                            <th class="sale-advanced-col" style="text-align: right; width: 100px;">Descuento</th>
+                            <th class="sale-advanced-col" style="text-align: right;">Subtotal</th>
                             <th style="text-align: right;">Total linea</th>
                             <th style="text-align: center; width: 90px;">Acciones</th>
                           </tr>
@@ -612,13 +634,18 @@
 
                     <div class="sale-checkout">
                       <div class="payment-adder card-subgroup">
-                        <h3>Agregar Pago</h3>
+                        <div class="payment-adder__header">
+                          <h3>Cobrar venta</h3>
+                          <button class="button button--small button--ghost" id="payment-fill-total" type="button">
+                            <i class="ti ti-cash"></i> Cobrar saldo
+                          </button>
+                        </div>
                         <div class="form-grid">
                           <label class="field">
                             <span>Método de pago</span>
                             <select id="payment-method-select"></select>
                           </label>
-                          <label class="field">
+                          <label class="field sale-advanced-field">
                             <span>Moneda</span>
                             <select id="payment-currency-select"></select>
                           </label>
@@ -626,12 +653,12 @@
                             <span>Monto</span>
                             <input id="payment-amount-input" type="number" step="0.01" min="0.01" placeholder="0.00" />
                           </label>
-                          <label class="field">
+                          <label class="field sale-advanced-field">
                             <span>Referencia <small>* Opcional</small></span>
                             <input id="payment-ref-input" type="text" placeholder="Efectivo / QR" />
                           </label>
                           <div class="form-actions field--wide">
-                            <button type="button" class="button button--ghost" id="payment-add-btn">Agregar Pago</button>
+                            <button type="button" class="button button--ghost" id="payment-add-btn">Registrar pago</button>
                           </div>
                         </div>
                       </div>
@@ -657,17 +684,17 @@
                       </div>
 
                       <div class="form-grid">
-                        <label class="field">
+                        <label class="field sale-advanced-field">
                           <span>Descuento Total (Manual)</span>
                           <input name="descuento_total" type="number" step="0.01" min="0" value="0" />
                         </label>
 
-                        <label class="field">
+                        <label class="field sale-advanced-field">
                           <span>Moneda de la Venta</span>
                           <select name="id_moneda" required></select>
                         </label>
 
-                        <label class="field">
+                        <label class="field sale-advanced-field">
                           <span>Tasa Cambio Aplicada</span>
                           <input name="tasa_cambio_aplicada" type="number" step="0.0001" min="0.0001" value="1.0000" readonly />
                         </label>
@@ -683,7 +710,7 @@
                           <div class="metric-badge"><span>Cambio (Vuelto)</span><strong id="sale-change-output">0.00</strong></div>
                         </div>
 
-                        <label class="field field--wide">
+                        <label class="field field--wide sale-advanced-field">
                           <span>Observación</span>
                           <textarea name="observacion" rows="2" placeholder="Nota opcional para la venta"></textarea>
                         </label>
@@ -735,11 +762,28 @@
               </div>
             </section>
 
-          <section class="tab-panel" data-panel="reportes" role="tabpanel">
+          <section class="tab-panel report-view" data-panel="reportes" role="tabpanel">
             <div class="report-toolbar">
               <div>
-                <h2 class="report-toolbar__title">Reportes y Dashboard</h2>
+                <span class="module-kicker">Administracion</span>
+                <h2 class="report-toolbar__title">Reportes</h2>
                 <p class="report-toolbar__subtitle">Análisis de rendimiento, ganancias diarias y control de caja.</p>
+              </div>
+              <div class="row-actions">
+                <button class="button button--ghost" id="report-filter-toggle" type="button" aria-pressed="false">
+                  <i class="ti ti-adjustments-horizontal"></i> Filtros
+                </button>
+                <button class="button button--ghost" id="report-detail-toggle" type="button" aria-pressed="false">
+                  <i class="ti ti-list-details"></i> Detalle
+                </button>
+              </div>
+            </div>
+
+            <div class="report-control-panel">
+              <div class="report-presets" role="group" aria-label="Periodo del reporte">
+                <button class="report-preset-btn is-active" type="button" data-report-range="today">Hoy</button>
+                <button class="report-preset-btn" type="button" data-report-range="week">7 dias</button>
+                <button class="report-preset-btn" type="button" data-report-range="month">Mes</button>
               </div>
               <div class="report-toolbar__filters">
                 <label class="field field--inline">
@@ -750,9 +794,39 @@
                   <span>Hasta</span>
                   <input id="report-end-date" type="date" />
                 </label>
-                <button class="button button--primary" id="report-generate-btn" type="button">Generar Reporte</button>
+                <label class="field field--inline report-advanced-filter">
+                  <span>Vendedor</span>
+                  <select id="report-vendedor-filter">
+                    <option value="">Todos</option>
+                  </select>
+                </label>
+                <label class="field field--inline report-advanced-filter">
+                  <span>Turno</span>
+                  <select id="report-turno-filter">
+                    <option value="">Todos</option>
+                  </select>
+                </label>
+                <label class="field field--inline report-advanced-filter">
+                  <span>Moneda</span>
+                  <select id="report-moneda-filter">
+                    <option value="">Todas</option>
+                  </select>
+                </label>
+                <label class="field field--inline report-advanced-filter">
+                  <span>Estado</span>
+                  <select id="report-estado-filter">
+                    <option value="">Validas</option>
+                    <option value="COMPLETADA">Completadas</option>
+                    <option value="PENDIENTE">Pendientes</option>
+                    <option value="ANULADA">Anuladas</option>
+                    <option value="TODOS">Todos</option>
+                  </select>
+                </label>
+                <button class="button button--primary" id="report-generate-btn" type="button"><i class="ti ti-chart-bar"></i> Generar</button>
               </div>
             </div>
+
+            <p class="form-status" id="report-status" role="status"></p>
 
             <!-- KPI Cards -->
             <div class="report-kpis-grid">
@@ -763,7 +837,7 @@
                   <strong class="kpi-card__value" id="kpi-total-vendido">Bs 0.00</strong>
                 </div>
               </div>
-              <div class="kpi-card kpi-card--cost">
+              <div class="kpi-card kpi-card--cost report-advanced-metric">
                 <div class="kpi-card__icon">📦</div>
                 <div class="kpi-card__content">
                   <span class="kpi-card__label">Costo de Ventas</span>
@@ -791,10 +865,44 @@
                   <strong class="kpi-card__value" id="kpi-saldo-pendiente">Bs 0.00</strong>
                 </div>
               </div>
+              <div class="kpi-card kpi-card--discount report-advanced-metric">
+                <div class="kpi-card__icon"><i class="ti ti-discount-2"></i></div>
+                <div class="kpi-card__content">
+                  <span class="kpi-card__label">Descuentos</span>
+                  <strong class="kpi-card__value" id="kpi-total-descuentos">Bs 0.00</strong>
+                </div>
+              </div>
+              <div class="kpi-card kpi-card--ticket report-advanced-metric">
+                <div class="kpi-card__icon"><i class="ti ti-calculator"></i></div>
+                <div class="kpi-card__content">
+                  <span class="kpi-card__label">Ticket Promedio</span>
+                  <strong class="kpi-card__value" id="kpi-ticket-promedio">Bs 0.00</strong>
+                </div>
+              </div>
+              <div class="kpi-card kpi-card--margin report-advanced-metric">
+                <div class="kpi-card__icon"><i class="ti ti-percentage"></i></div>
+                <div class="kpi-card__content">
+                  <span class="kpi-card__label">Margen Promedio</span>
+                  <strong class="kpi-card__value" id="kpi-margen-promedio">0.00%</strong>
+                </div>
+              </div>
+              <div class="kpi-card kpi-card--pending-count report-advanced-metric">
+                <div class="kpi-card__icon"><i class="ti ti-alert-circle"></i></div>
+                <div class="kpi-card__content">
+                  <span class="kpi-card__label">Ventas Pendientes</span>
+                  <strong class="kpi-card__value" id="kpi-ventas-pendientes">0</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="report-insights">
+              <span id="report-best-sale">Venta mas rentable: sin datos</span>
+              <span id="report-low-margin">Margen mas bajo: sin datos</span>
+              <span id="report-payment-count">0 pagos registrados</span>
             </div>
 
             <!-- Reports and Charts Layout -->
-            <div class="report-main-layout">
+            <div class="report-main-layout report-detail-section">
               <!-- Left Column: Tables -->
               <div class="report-tables-section">
                 <!-- Secondary tabs for switching tables -->
@@ -820,16 +928,19 @@
                             <th>Factura</th>
                             <th>Fecha</th>
                             <th>Vendedor</th>
-                            <th>Cliente</th>
+                            <th>Turno</th>
+                            <th style="text-align: right;">Items</th>
                             <th style="text-align: right;">Total</th>
-                            <th style="text-align: right;">Costo Hist.</th>
+                            <th style="text-align: right;">Costo</th>
                             <th style="text-align: right;">Ganancia</th>
                             <th style="text-align: right;">Margen</th>
+                            <th style="text-align: right;">Caja</th>
                             <th style="text-align: center;">Estado</th>
+                            <th style="text-align: center;">Detalle</th>
                           </tr>
                         </thead>
                         <tbody>
-                          <tr><td colspan="9" class="empty-state">Seleccione un rango de fechas y haga clic en Generar.</td></tr>
+                          <tr><td colspan="12" class="empty-state">Seleccione un rango de fechas y haga clic en Generar.</td></tr>
                         </tbody>
                       </table>
                     </div>
@@ -850,12 +961,44 @@
                         <thead>
                           <tr>
                             <th>Método de Pago</th>
+                            <th>Moneda</th>
                             <th style="text-align: right;">Total Recibido</th>
-                            <th style="text-align: center;">Transacciones</th>
+                            <th style="text-align: center;">Pagos</th>
+                            <th style="text-align: center;">Ventas</th>
+                            <th style="text-align: center;">Sin ref.</th>
                           </tr>
                         </thead>
                         <tbody>
-                          <tr><td colspan="3" class="empty-state">Seleccione un rango de fechas y haga clic en Generar.</td></tr>
+                          <tr><td colspan="6" class="empty-state">Seleccione un rango de fechas y haga clic en Generar.</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div class="module-card">
+                    <div class="module-card__header">
+                      <div>
+                        <span class="module-kicker">Control de caja</span>
+                        <h2>Conciliacion por venta</h2>
+                      </div>
+                      <span class="module-badge" id="report-cash-count">0 pagos</span>
+                    </div>
+                    <div class="table-wrap">
+                      <table class="data-table" id="report-cashflow-sales-table">
+                        <thead>
+                          <tr>
+                            <th>Factura</th>
+                            <th>Cliente</th>
+                            <th>Vendedor</th>
+                            <th style="text-align: right;">Vendido</th>
+                            <th style="text-align: right;">Recibido</th>
+                            <th style="text-align: right;">Pendiente</th>
+                            <th style="text-align: right;">Cambio</th>
+                            <th>Metodos</th>
+                            <th style="text-align: center;">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr><td colspan="9" class="empty-state">Seleccione un rango de fechas y haga clic en Generar.</td></tr>
                         </tbody>
                       </table>
                     </div>
@@ -888,6 +1031,18 @@
                   </div>
                   <div class="chart-container" id="shift-chart-container">
                     <div class="empty-state">No hay datos de turnos.</div>
+                  </div>
+                </div>
+
+                <div class="module-card chart-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Vendedores</span>
+                      <h2>Ganancia por Vendedor</h2>
+                    </div>
+                  </div>
+                  <div class="chart-container" id="seller-chart-container">
+                    <div class="empty-state">No hay datos de vendedores.</div>
                   </div>
                 </div>
 
