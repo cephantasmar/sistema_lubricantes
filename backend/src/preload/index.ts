@@ -37,7 +37,9 @@ contextBridge.exposeInMainWorld('inventoryApi', {
 
   // Auth & Admin
   login: (payload: AuthInput) => ipcRenderer.invoke('auth:login', payload) as Promise<AuthResult>,
+  changePassword: (payload: { userId: number; newPasswordPlain: string }) => ipcRenderer.invoke('auth:change-password', payload) as Promise<{ success: boolean; message?: string }>,
   saveRole: (payload: RoleFormInput) => ipcRenderer.invoke('admin:save-role', payload) as Promise<{ roleId: number }>,
   saveWorker: (payload: WorkerFormInput) => ipcRenderer.invoke('admin:save-worker', payload) as Promise<{ workerId: number }>,
+  resetUserPassword: (workerId: number) => ipcRenderer.invoke('admin:reset-user-password', workerId) as Promise<{ success: boolean; message?: string }>,
   recordAttendance: (payload: AttendanceInput) => ipcRenderer.invoke('shifts:record-attendance', payload) as Promise<{ attendanceId: number }>,
 })

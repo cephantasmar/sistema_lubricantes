@@ -257,6 +257,44 @@ body {
   color: #ffffff;
 }
 
+.sidebar-accordion {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.accordion-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+}
+
+.accordion-icon {
+  transition: transform 0.2s ease;
+}
+
+.accordion-toggle[aria-expanded="true"] .accordion-icon {
+  transform: rotate(180deg);
+}
+
+.accordion-content {
+  margin-top: 5px;
+  gap: 5px;
+  padding-left: 10px;
+}
+
+.tabs__button--sub {
+  font-size: 0.9rem;
+  padding: 10px 15px;
+  text-align: left;
+  justify-content: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .tab-panels {
   margin-top: 14px;
 }
@@ -1661,5 +1699,89 @@ body {
   .report-main-layout {
     grid-template-columns: 1fr;
   }
+}
+
+
+/* Modals */
+.modal-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999; }
+.modal-overlay .module-card { width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+[hidden] { display: none !important; }
+
+/* =========================================
+   PASSWORD STRENGTH METER & REQUIREMENTS
+   ========================================= */
+.password-strength-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.password-strength-bar {
+  flex: 1;
+  height: 6px;
+  background-color: #cbd5e1;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.password-strength-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background-color: var(--danger);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+}
+
+.password-strength-text {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 75px;
+  text-align: right;
+  transition: color 0.3s ease;
+}
+
+.password-requirements {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.requirement {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  transition: color 0.2s ease;
+}
+
+.requirement i.ti {
+  font-size: 1rem;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.requirement.unmet {
+  color: #94a3b8;
+}
+
+.requirement.unmet i.ti {
+  color: #cbd5e1;
+}
+
+.requirement.met {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.requirement.met i.ti {
+  color: var(--success);
+  transform: scale(1.1);
 }
 

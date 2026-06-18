@@ -33,8 +33,10 @@ declare global {
       registerAttendanceEntry: (payload: AttendanceFormInput) => Promise<{ attendanceId: number }>
       registerAttendanceExit: (payload: AttendanceFormInput) => Promise<{ attendanceId: number }>
       login: (payload: AuthInput) => Promise<AuthResult>
+      changePassword: (payload: { userId: number; newPasswordPlain: string }) => Promise<{ success: boolean; message?: string }>
       saveRole: (payload: RoleFormInput) => Promise<{ roleId: number }>
       saveWorker: (payload: WorkerFormInput) => Promise<{ workerId: number }>
+      resetUserPassword: (workerId: number) => Promise<{ success: boolean; message?: string }>
       recordAttendance: (payload: AttendanceInput) => Promise<{ attendanceId: number }>
     }
   }

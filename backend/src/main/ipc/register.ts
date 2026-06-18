@@ -12,8 +12,8 @@ import {
   saveProduct,
   getSalesReport,
 } from '../modules/store'
-import { login } from '../modules/auth'
-import { saveRole, saveWorker } from '../modules/admin'
+import { changePassword, login } from '../modules/auth'
+import { resetUserPassword, saveRole, saveWorker } from '../modules/admin'
 
 let handlersRegistered = false
 
@@ -78,6 +78,14 @@ export function registerSystemIpc(database: Database.Database) {
 
   ipcMain.handle('admin:save-worker', (_event, payload) => {
     return saveWorker(database, payload)
+  })
+
+  ipcMain.handle('admin:reset-user-password', (_event, workerId) => {
+    return resetUserPassword(database, workerId)
+  })
+
+  ipcMain.handle('auth:change-password', (_event, payload) => {
+    return changePassword(database, payload.userId, payload.newPasswordPlain)
   })
 
 }

@@ -102,6 +102,7 @@ export type AuditLogRow = {
 export type AuthResult = {
   success: boolean
   message?: string
+  requiresPasswordChange?: boolean
   user?: {
     id_usuario: number
     username: string

@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { RoleFormInput, WorkerFormInput } from '../../shared/ipc/contracts'
-import { logAudit, requirePermission } from './auth'
+import { hashPassword, logAudit, requirePermission } from './auth'
 
 function getNextId(db: Database.Database, tableName: string, idColumn: string): number {
   const stmt = db.prepare(`SELECT MAX(${idColumn}) as maxId FROM ${tableName}`)
@@ -73,8 +73,8 @@ export function saveWorker(db: Database.Database, payload: WorkerFormInput) {
     if (payload.crear_usuario && !userId) {
       userId = getNextId(db, 'usuarios', 'id_usuario')
       const username = (payload.nombres.split(' ')[0] + payload.apellidos.split(' ')[0]).toLowerCase()
-      const stmtUser = db.prepare(`INSERT INTO usuarios (id_usuario, username, email, password_hash, estado, creado_en) VALUES (?, ?, ?, ?, 'activo', ?)`)
-      stmtUser.run(userId, username, `${username}@local`, '12345', timestamp) // Default password
+      const stmtUser = db.prepare(`INSERT INTO usuarios (id_usuario, username, email, password_hash, requiere_cambio_password, estado, creado_en) VALUES (?, ?, ?, ?, 1, 'activo', ?)`)
+      stmtUser.run(userId, username, `${username}@local`, hashPassword('12345'), timestamp) // Default password
       logAudit(db, 'INSERT', 'usuarios', userId, `Usuario ${username} creado automáticamente`)
     }
 
@@ -99,4 +99,25 @@ export function saveWorker(db: Database.Database, payload: WorkerFormInput) {
     return { workerId }
   })
   return transaction()
+}
+
+export function resetUserPassword(db: Database.Database, workerId: number): { success: boolean; message?: string } {
+  requirePermission(db, 'GESTIONAR_TRABAJADORES')
+  try {
+    const workerInfo = db.prepare(`SELECT id_usuario FROM trabajadores WHERE id_trabajador = ?`).get(workerId) as any
+    if (!workerInfo || !workerInfo.id_usuario) {
+      return { success: false, message: 'El trabajador no tiene un usuario de sistema asignado.' }
+    }
+
+    const userId = workerInfo.id_usuario
+    const newHash = hashPassword('12345')
+    db.prepare('UPDATE usuarios SET password_hash = ?, requiere_cambio_password = 1, actualizado_en = ? WHERE id_usuario = ?')
+      .run(newHash, localDateTimeSql(), userId)
+    
+    logAudit(db, 'UPDATE', 'usuarios', userId, 'Contraseña restablecida a valor por defecto')
+    return { success: true, message: 'Contraseña restablecida exitosamente.' }
+  } catch (err) {
+    console.error('Error resetUserPassword:', err)
+    return { success: false, message: 'Error al restablecer contraseña.' }
+  }
 }
