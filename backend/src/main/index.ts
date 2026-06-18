@@ -43,15 +43,22 @@ async function createWindow() {
   })
 }
 
-app.whenReady().then(async () => {
-  await createWindow()
+app.whenReady()
+  .then(async () => {
+    await createWindow()
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      void createWindow()
-    }
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        void createWindow().catch((error) => {
+          console.error('No se pudo volver a abrir la aplicación:', error)
+        })
+      }
+    })
   })
-})
+  .catch((error) => {
+    console.error('No se pudo iniciar la aplicación:', error)
+    app.quit()
+  })
 
 app.on('window-all-closed', () => {
   closeDatabase()

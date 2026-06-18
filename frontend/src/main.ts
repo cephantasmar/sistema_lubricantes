@@ -22,7 +22,9 @@ import type {
 type TabName = 'home' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'administracion' | 'reportes'
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
+type ThemeName = 'light' | 'dark'
 
+const THEME_STORAGE_KEY = 'lubricantes-theme'
 
 type ProductFormState = { id_producto: number | null }
 const productFormState: ProductFormState = { id_producto: null }
@@ -68,6 +70,40 @@ let inventoryAuditSearchTerm = ''
 let clockInterval: number | null = null
 let landingDismissTimer: number | null = null
 let bootstrapInitialized = false
+let saleSubmissionInProgress = false
+
+function applyTheme(theme: ThemeName) {
+  document.documentElement.dataset.theme = theme
+  const button = document.querySelector<HTMLButtonElement>('#theme-toggle')
+  if (!button) return
+
+  const dark = theme === 'dark'
+  button.setAttribute('aria-pressed', String(dark))
+  button.title = dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'
+  button.innerHTML = dark
+    ? '<i class="ti ti-sun"></i> <span>Modo claro</span>'
+    : '<i class="ti ti-moon"></i> <span>Modo oscuro</span>'
+}
+
+function initTheme() {
+  let theme: ThemeName = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+  try {
+    theme = localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'
+  } catch {
+    // La aplicación puede funcionar aunque el almacenamiento local no esté disponible.
+  }
+
+  applyTheme(theme)
+  document.querySelector<HTMLButtonElement>('#theme-toggle')?.addEventListener('click', () => {
+    const nextTheme: ThemeName = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+    applyTheme(nextTheme)
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextTheme)
+    } catch {
+      // En este caso la preferencia solo durará durante la ejecución actual.
+    }
+  })
+}
 
 function hasPermission(permissionName: string) {
   return Boolean(currentUser?.isAdminLike || currentUser?.permissionNames.includes(permissionName))
@@ -2712,6 +2748,11 @@ async function bootstrap() {
 
   saleForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (saleSubmissionInProgress) {
+      setStatus('sale-status', 'La venta ya se está procesando. Espera un momento.', 'info')
+      return
+    }
+
     if (!hasPermission('REGISTRAR_VENTAS')) {
       setStatus('sale-status', 'No tienes permiso para registrar ventas.', 'error')
       return
@@ -2794,6 +2835,7 @@ async function bootstrap() {
       submitBtn.textContent = 'Procesando...'
     }
 
+    saleSubmissionInProgress = true
     try {
       await window.inventoryApi.createSale(payload)
       setStatus('sale-status', 'Venta registrada correctamente.', 'success')
@@ -2805,6 +2847,7 @@ async function bootstrap() {
     } catch (error) {
       setStatus('sale-status', getFriendlyErrorMessage(error, 'No se pudo registrar la venta.'), 'error')
     } finally {
+      saleSubmissionInProgress = false
       if (submitBtn) {
         submitBtn.disabled = false
         submitBtn.textContent = 'Confirmar venta'
@@ -3607,4 +3650,5 @@ function renderDailyTrendChart(containerId: string, data: { fecha: string; total
   })
 }
 
+initTheme()
 void initLogin()

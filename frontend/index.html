@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inventario de Aceites</title>
+    <script>
+      (() => {
+        try {
+          if (localStorage.getItem('lubricantes-theme') === 'dark') {
+            document.documentElement.dataset.theme = 'dark'
+          }
+        } catch {}
+      })()
+    </script>
   </head>
   <body>
     <div id="login-overlay" class="login-overlay">
@@ -46,6 +55,9 @@
             <button class="tabs__button" type="button" data-tab="reportes" role="tab" aria-selected="false"><i class="ti ti-chart-bar"></i> Reportes</button>
           </nav>
           <div class="sidebar-footer">
+            <button id="theme-toggle" type="button" aria-pressed="false">
+              <i class="ti ti-moon"></i> <span>Modo oscuro</span>
+            </button>
             <button id="logout-btn"><i class="ti ti-logout"></i> <span>Cerrar sesión</span></button>
           </div>
         </aside>
@@ -615,8 +627,8 @@
                             <input id="payment-amount-input" type="number" step="0.01" min="0.01" placeholder="0.00" />
                           </label>
                           <label class="field">
-                            <span>Referencia (Opcional)</span>
-                            <input id="payment-ref-input" type="text" placeholder="No. Trans. / QR / Tarjeta" />
+                            <span>Referencia <small>* Opcional</small></span>
+                            <input id="payment-ref-input" type="text" placeholder="Efectivo / QR" />
                           </label>
                           <div class="form-actions field--wide">
                             <button type="button" class="button button--ghost" id="payment-add-btn">Agregar Pago</button>

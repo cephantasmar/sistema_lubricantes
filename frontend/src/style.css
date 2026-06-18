@@ -22,6 +22,29 @@
   --shadow: 0 18px 45px rgba(94, 111, 145, 0.09);
 }
 
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0d1715;
+  --surface: #14211e;
+  --surface-alt: #192925;
+  --surface-soft: #1d302b;
+  --text: #e7f2ee;
+  --muted: #9db5ad;
+  --border: #29443c;
+  --accent: #78c4ad;
+  --accent-2: #5eaa94;
+  --accent-soft: #203b34;
+  --accent-blue: #19352f;
+  --pastel-green-1: #172a25;
+  --pastel-green-2: #193029;
+  --pastel-green-3: #1c362e;
+  --pastel-green-4: #182c27;
+  --pastel-green-5: #1b322c;
+  --danger: #f08092;
+  --success: #72d09d;
+  --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1773,11 +1796,11 @@ body {
   border-top: 1px solid var(--border);
 }
 
-.sidebar-footer #logout-btn {
+.sidebar-footer #logout-btn,
+.sidebar-footer #theme-toggle {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: var(--danger);
   width: 100%;
   display: flex;
   align-items: center;
@@ -1791,25 +1814,42 @@ body {
   cursor: pointer;
 }
 
+.sidebar-footer #theme-toggle {
+  color: var(--muted);
+}
+
+.sidebar-footer #theme-toggle:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sidebar-footer #logout-btn {
+  color: var(--danger);
+}
+
 .sidebar-footer #logout-btn:hover {
   background: #fef2f2;
 }
 
-.sidebar-footer #logout-btn i.ti {
+.sidebar-footer #logout-btn i.ti,
+.sidebar-footer #theme-toggle i.ti {
   font-size: 1.4rem;
   line-height: 1;
 }
 
-.sidebar.is-collapsed .sidebar-footer #logout-btn {
+.sidebar.is-collapsed .sidebar-footer #logout-btn,
+.sidebar.is-collapsed .sidebar-footer #theme-toggle {
   padding: 12px 0;
   justify-content: center;
 }
 
-.sidebar.is-collapsed .sidebar-footer #logout-btn span {
+.sidebar.is-collapsed .sidebar-footer #logout-btn span,
+.sidebar.is-collapsed .sidebar-footer #theme-toggle span {
   display: none;
 }
 
-.sidebar.is-collapsed .sidebar-footer #logout-btn i.ti {
+.sidebar.is-collapsed .sidebar-footer #logout-btn i.ti,
+.sidebar.is-collapsed .sidebar-footer #theme-toggle i.ti {
   font-size: 1.6rem;
   margin: 0;
 }
@@ -2250,5 +2290,184 @@ body {
   .report-main-layout {
     grid-template-columns: 1fr;
   }
+}
+
+/* =========================================
+   TEMA OSCURO
+   ========================================= */
+:root[data-theme='dark'] html,
+:root[data-theme='dark'] body {
+  background:
+    radial-gradient(circle at top left, rgba(63, 125, 107, 0.2) 0, transparent 30%),
+    linear-gradient(180deg, #101c19 0%, var(--bg) 100%);
+}
+
+:root[data-theme='dark'] .workspace,
+:root[data-theme='dark'] .brand-block,
+:root[data-theme='dark'] .status-card {
+  background: rgba(20, 33, 30, 0.94);
+}
+
+:root[data-theme='dark'] .dashboard-brand {
+  background:
+    radial-gradient(circle at 100% 0, rgba(120, 196, 173, 0.15), transparent 42%),
+    linear-gradient(145deg, #172722 0%, #1d332c 100%);
+}
+
+:root[data-theme='dark'] .dashboard-brand h1,
+:root[data-theme='dark'] .landing-panel h2,
+:root[data-theme='dark'] .home-section-header h3,
+:root[data-theme='dark'] .weather-card__content strong,
+:root[data-theme='dark'] .weather-card__metrics strong,
+:root[data-theme='dark'] .quick-action-card strong,
+:root[data-theme='dark'] .home-info-card strong,
+:root[data-theme='dark'] .client-quick-form__header h3 {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .dashboard-brand__tags span,
+:root[data-theme='dark'] .landing-clock,
+:root[data-theme='dark'] .quick-actions-panel,
+:root[data-theme='dark'] .home-info-card,
+:root[data-theme='dark'] .weather-card__metrics div {
+  border-color: var(--border);
+  background: rgba(25, 41, 37, 0.84);
+}
+
+:root[data-theme='dark'] .landing-panel {
+  border-color: var(--border);
+  background:
+    linear-gradient(135deg, rgba(24, 45, 38, 0.98), rgba(17, 31, 27, 0.98)),
+    var(--surface);
+}
+
+:root[data-theme='dark'] .weather-card {
+  border-color: var(--border);
+  background: linear-gradient(145deg, #19352f, #1a3035);
+}
+
+:root[data-theme='dark'] .weather-card[data-period='night'] {
+  border-color: #354963;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(210, 226, 255, 0.72) 0 2px, transparent 3px),
+    radial-gradient(circle at 20% 32%, rgba(210, 226, 255, 0.5) 0 1px, transparent 2px),
+    linear-gradient(145deg, #19263a, #172d35);
+}
+
+:root[data-theme='dark'] .weather-refresh,
+:root[data-theme='dark'] .quick-action-card,
+:root[data-theme='dark'] .product-result,
+:root[data-theme='dark'] .client-picker__search,
+:root[data-theme='dark'] .table-wrap,
+:root[data-theme='dark'] .field input,
+:root[data-theme='dark'] .field select,
+:root[data-theme='dark'] .field textarea,
+:root[data-theme='dark'] .field output,
+:root[data-theme='dark'] .table-input,
+:root[data-theme='dark'] .button,
+:root[data-theme='dark'] .button--ghost,
+:root[data-theme='dark'] .card-subgroup {
+  border-color: var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .quick-action-card:hover,
+:root[data-theme='dark'] .product-result:hover {
+  background: var(--surface-soft);
+}
+
+:root[data-theme='dark'] .data-table th {
+  border-color: var(--border);
+  background: #1a2b27;
+}
+
+:root[data-theme='dark'] .data-table td {
+  border-bottom-color: var(--border);
+}
+
+:root[data-theme='dark'] .summary-card,
+:root[data-theme='dark'] .module-card,
+:root[data-theme='dark'] .info-item,
+:root[data-theme='dark'] .metric-badge,
+:root[data-theme='dark'] .sale-summary div,
+:root[data-theme='dark'] .shift-state,
+:root[data-theme='dark'] .comparison-item {
+  border-color: var(--border);
+  background: var(--surface-alt);
+}
+
+:root[data-theme='dark'] .client-quick-form {
+  border-color: var(--border);
+  background: linear-gradient(145deg, #172a25, #1b352d);
+}
+
+:root[data-theme='dark'] .excel-input:focus {
+  background-color: #213b33 !important;
+}
+
+:root[data-theme='dark'] .empty-excel-row td {
+  background-color: #172420;
+}
+
+:root[data-theme='dark'] .sidebar-tabs .tabs__button {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .sidebar-tabs .tabs__button:hover,
+:root[data-theme='dark'] .sidebar-tabs .tabs__button.is-active {
+  color: var(--accent);
+}
+
+:root[data-theme='dark'] .sidebar-footer #logout-btn:hover {
+  background: rgba(240, 128, 146, 0.12);
+}
+
+:root[data-theme='dark'] .button--danger {
+  border-color: rgba(240, 128, 146, 0.35);
+  background: rgba(240, 128, 146, 0.1);
+}
+
+:root[data-theme='dark'] .login-overlay {
+  background:
+    radial-gradient(circle at top left, rgba(67, 134, 115, 0.25) 0, transparent 32%),
+    radial-gradient(circle at bottom right, rgba(52, 100, 88, 0.2) 0, transparent 34%),
+    linear-gradient(135deg, #0d1715, #14211e);
+}
+
+:root[data-theme='dark'] .login-card {
+  border-color: rgba(120, 196, 173, 0.18);
+  background: rgba(20, 33, 30, 0.94);
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='dark'] .login-card .field span {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .login-card .field input,
+:root[data-theme='dark'] .login-card .field input:focus {
+  border-color: var(--border);
+  background: var(--surface-alt);
+}
+
+:root[data-theme='dark'] .modal__overlay {
+  background: rgba(3, 9, 8, 0.7);
+}
+
+:root[data-theme='dark'] .modal__content {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme='dark'] .welcome-banner,
+:root[data-theme='dark'] .welcome-banner .brand-block__kicker,
+:root[data-theme='dark'] .welcome-banner h1,
+:root[data-theme='dark'] .welcome-banner p {
+  color: #0e211b;
+}
+
+:root[data-theme='dark'] input::placeholder,
+:root[data-theme='dark'] textarea::placeholder {
+  color: #718a82;
 }
 
