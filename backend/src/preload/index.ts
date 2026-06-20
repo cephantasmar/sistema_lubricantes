@@ -45,14 +45,11 @@ contextBridge.exposeInMainWorld('inventoryApi', {
   changePassword: (payload: { userId: number; newPasswordPlain: string }) => ipcRenderer.invoke('auth:change-password', payload) as Promise<{ success: boolean; message?: string }>,
   saveRole: (payload: RoleFormInput) => ipcRenderer.invoke('admin:save-role', payload) as Promise<{ roleId: number }>,
   saveWorker: (payload: WorkerFormInput) => ipcRenderer.invoke('admin:save-worker', payload) as Promise<{ workerId: number }>,
-<<<<<<< HEAD
   resetUserPassword: (workerId: number) => ipcRenderer.invoke('admin:reset-user-password', workerId) as Promise<{ success: boolean; message?: string }>,
-=======
   saveShift: (payload: ShiftFormInput) => ipcRenderer.invoke('admin:save-shift', payload) as Promise<{ shiftId: number }>,
   deleteShift: (shiftId: number) => ipcRenderer.invoke('admin:delete-shift', shiftId) as Promise<{ deleted: boolean }>,
   setShiftState: (shiftId: number, enabled: boolean) =>
     ipcRenderer.invoke('admin:set-shift-state', shiftId, enabled) as Promise<{ shiftId: number; enabled: boolean }>,
->>>>>>> origin/SPRINT3
   recordAttendance: (payload: AttendanceInput) => ipcRenderer.invoke('shifts:record-attendance', payload) as Promise<{ attendanceId: number }>,
   fetchAuditLogs: (payload: FetchAuditLogsInput) => ipcRenderer.invoke('admin:fetch-audit-logs', payload) as Promise<FetchAuditLogsResult>,
 })

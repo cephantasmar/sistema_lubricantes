@@ -41,13 +41,10 @@ declare global {
       changePassword: (payload: { userId: number; newPasswordPlain: string }) => Promise<{ success: boolean; message?: string }>
       saveRole: (payload: RoleFormInput) => Promise<{ roleId: number }>
       saveWorker: (payload: WorkerFormInput) => Promise<{ workerId: number }>
-<<<<<<< HEAD
       resetUserPassword: (workerId: number) => Promise<{ success: boolean; message?: string }>
-=======
       saveShift: (payload: ShiftFormInput) => Promise<{ shiftId: number }>
       deleteShift: (shiftId: number) => Promise<{ deleted: boolean }>
       setShiftState: (shiftId: number, enabled: boolean) => Promise<{ shiftId: number; enabled: boolean }>
->>>>>>> origin/SPRINT3
       recordAttendance: (payload: AttendanceInput) => Promise<{ attendanceId: number }>
       fetchAuditLogs: (payload: FetchAuditLogsInput) => Promise<FetchAuditLogsResult>
     }

@@ -1,11 +1,6 @@
 import type Database from 'better-sqlite3'
-<<<<<<< HEAD
-import type { RoleFormInput, WorkerFormInput, FetchAuditLogsInput, FetchAuditLogsResult, AuditLogRow } from '../../shared/ipc/contracts'
+import type { RoleFormInput, ShiftFormInput, WorkerFormInput, FetchAuditLogsInput, FetchAuditLogsResult, AuditLogRow } from '../../shared/ipc/contracts'
 import { hashPassword, logAudit, requirePermission } from './auth'
-=======
-import type { RoleFormInput, ShiftFormInput, WorkerFormInput } from '../../shared/ipc/contracts'
-import { logAudit, requirePermission } from './auth'
->>>>>>> origin/SPRINT3
 
 function getNextId(db: Database.Database, tableName: string, idColumn: string): number {
   const stmt = db.prepare(`SELECT MAX(${idColumn}) as maxId FROM ${tableName}`)
@@ -106,7 +101,6 @@ export function saveWorker(db: Database.Database, payload: WorkerFormInput) {
   return transaction()
 }
 
-<<<<<<< HEAD
 export function resetUserPassword(db: Database.Database, workerId: number): { success: boolean; message?: string } {
   requirePermission(db, 'GESTIONAR_TRABAJADORES')
   try {
@@ -192,7 +186,7 @@ export function fetchAuditLogs(db: Database.Database, input: FetchAuditLogsInput
     totalPages,
     currentPage
   }
-=======
+
 function validateShift(payload: ShiftFormInput) {
   const name = payload.nombre.trim()
   const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -298,5 +292,4 @@ export function setShiftState(db: Database.Database, shiftId: number, enabled: b
   logAudit(db, 'UPDATE', 'turnos', shiftId, `Turno ${shift.nombre} ${enabled ? 'habilitado' : 'deshabilitado'}`)
 
   return { shiftId, enabled }
->>>>>>> origin/SPRINT3
 }

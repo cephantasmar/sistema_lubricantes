@@ -58,12 +58,9 @@ function seedDatabase(databaseInstance: Database.Database) {
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (8, 'REGISTRAR_ASISTENCIAS', 'Marcar entrada y salida', 'ASISTENCIAS', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (9, 'GESTIONAR_ROLES', 'Crear y asignar roles (RBAC)', 'ADMINISTRACION', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (10, 'GESTIONAR_TRABAJADORES', 'Añadir y editar personal', 'ADMINISTRACION', '${now}')`,
-<<<<<<< HEAD
-    `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (11, 'VER_REPORTES', 'Ver reportes y métricas', 'REPORTES', '${now}')`,
-    `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (12, 'GENERAR_REPORTES', 'Exportar reportes en CSV', 'REPORTES', '${now}')`,
-=======
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (11, 'GESTIONAR_TURNOS', 'Crear y editar horarios de trabajo', 'ADMINISTRACION', '${now}')`,
->>>>>>> origin/SPRINT3
+    `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (12, 'VER_REPORTES', 'Ver reportes y métricas', 'REPORTES', '${now}')`,
+    `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (13, 'GENERAR_REPORTES', 'Exportar reportes en CSV', 'REPORTES', '${now}')`,
     `INSERT OR IGNORE INTO rol_permiso (id_rol, id_permiso) SELECT 1, id_permiso FROM permisos`,
     "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (1, 'Mañana', '08:00', '12:00', 'Turno de apertura', 1)",
     "UPDATE turnos SET nombre = 'Mañana' WHERE id_turno = 1",
@@ -116,28 +113,7 @@ function seedDatabase(databaseInstance: Database.Database) {
     ) VALUES (?, ?, 'ENTRADA', ?, ?, 'Stock inicial de prueba', ?, ?, 1, ?)
   `)
 
-<<<<<<< HEAD
-  const getProductStock = databaseInstance.prepare(`
-    SELECT COALESCE(SUM(
-      CASE
-        WHEN im.tipo_movimiento IN ('ENTRADA', 'AJUSTE_POS', 'DEVOLUCION') THEN im.cantidad
-        WHEN im.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEG', 'VENTA') THEN -im.cantidad
-        ELSE 0
-      END
-    ), 0) AS stock_actual
-    FROM inventario_movimientos im
-    WHERE im.id_producto = ?
-  `)
 
-  const insertStockAdjustment = databaseInstance.prepare(`
-    INSERT OR IGNORE INTO inventario_movimientos (
-      id_movimiento, id_producto, tipo_movimiento, cantidad, costo_unitario, motivo,
-      referencia, observacion, realizado_por, fecha_movimiento
-    ) VALUES (?, ?, 'AJUSTE_POS', ?, ?, 'Reposicion de stock demo', ?, ?, 1, ?)
-  `)
-
-=======
->>>>>>> origin/SPRINT3
   databaseInstance.transaction(() => {
     seedStatements.forEach((statement) => {
       databaseInstance.prepare(statement).run()
