@@ -1,9 +1,43 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'node:path'
 import { getDatabase, closeDatabase } from './db/database'
 import { registerSystemIpc } from './ipc/register'
 
 let mainWindow: BrowserWindow | null = null
+
+function setupApplicationMenu(window: BrowserWindow, enableDeveloperTools: boolean) {
+  const template: MenuItemConstructorOptions[] = [
+    {
+      label: 'Archivo',
+      submenu: [
+        { role: 'quit', label: 'Salir' },
+      ],
+    },
+  ]
+
+  if (enableDeveloperTools) {
+    template.push({
+      label: 'Herramientas',
+      submenu: [
+        {
+          label: 'Herramientas de desarrollador',
+          accelerator: 'F12',
+          click: () => window.webContents.toggleDevTools(),
+        },
+        {
+          label: 'Abrir DevTools separado',
+          accelerator: 'Ctrl+Shift+I',
+          click: () => window.webContents.openDevTools({ mode: 'detach' }),
+        },
+        { type: 'separator' },
+        { role: 'reload', label: 'Recargar' },
+        { role: 'forceReload', label: 'Recargar sin cache' },
+      ],
+    })
+  }
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
 
 async function createWindow() {
   const database = getDatabase()
@@ -22,8 +56,10 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      devTools: !app.isPackaged,
     },
   })
+  setupApplicationMenu(mainWindow, !app.isPackaged)
 
   mainWindow.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
     return permission === 'geolocation'

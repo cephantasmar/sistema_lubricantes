@@ -8,6 +8,8 @@ import type {
   InventoryAuditInput,
   InventoryAuditResult,
   MovementFormInput,
+  PdfPreviewInput,
+  PdfPreviewResult,
   ProductFormInput,
   SaleFormInput,
   SaleFullDetail,
@@ -26,6 +28,7 @@ declare global {
     inventoryApi: {
       getAppInfo: () => Promise<AppInfo>
       getBootstrapData: () => Promise<BootstrapData>
+      previewPdf: (payload: PdfPreviewInput) => Promise<PdfPreviewResult>
       saveProduct: (payload: ProductFormInput) => Promise<{ productId: number }>
       createMovement: (payload: MovementFormInput) => Promise<{ movementId: number }>
       closeInventory: (payload: InventoryAuditInput) => Promise<InventoryAuditResult>

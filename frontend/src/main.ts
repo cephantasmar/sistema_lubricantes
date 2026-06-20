@@ -1163,17 +1163,22 @@ function renderSalesTable(data: BootstrapData) {
     .map(
       (sale) => `
         <tr>
-          <td><strong>${escapeHtml(sale.numero_factura)}</strong></td>
-          <td>${escapeHtml(formatDateTime(sale.fecha_venta))}</td>
-          <td>${escapeHtml(sale.cliente_nombre)}</td>
-          <td>${escapeHtml(sale.productos_diferentes)}</td>
-          <td>${escapeHtml(formatCurrency(Number(sale.cantidad_total)))}</td>
-          <td>${escapeHtml(formatCurrency(Number(sale.total)))}</td>
+          <td data-label="Factura"><strong>${escapeHtml(sale.numero_factura)}</strong></td>
+          <td data-label="Fecha">${escapeHtml(formatDateTime(sale.fecha_venta))}</td>
+          <td data-label="Cliente">${escapeHtml(sale.cliente_nombre)}</td>
+          <td data-label="Productos">${escapeHtml(sale.productos_diferentes)}</td>
+          <td data-label="Unidades">${escapeHtml(formatCurrency(Number(sale.cantidad_total)))}</td>
+          <td data-label="Total">${escapeHtml(formatCurrency(Number(sale.total)))}</td>
 
-          <td>${escapeHtml(sale.metodo_pago)} · ${escapeHtml(sale.moneda)}</td>
-          <td><span class="badge badge--soft">${escapeHtml(sale.estado)}</span></td>
-          <td>
-            <button class="button button--small button--primary" type="button" data-sale-detail-btn="${sale.id_venta}">Ver</button>
+          <td data-label="Pago">${escapeHtml(sale.metodo_pago)} · ${escapeHtml(sale.moneda)}</td>
+          <td data-label="Estado"><span class="badge badge--soft">${escapeHtml(sale.estado)}</span></td>
+          <td data-label="Acciones">
+            <div class="sale-table-actions">
+              <button class="button button--small button--primary" type="button" data-sale-detail-btn="${sale.id_venta}">Ver</button>
+              <button class="button button--small button--ghost" type="button" data-sale-pdf-btn="${sale.id_venta}">
+                <i class="ti ti-file-type-pdf"></i> PDF
+              </button>
+            </div>
           </td>
         </tr>
       `,
@@ -1184,6 +1189,13 @@ function renderSalesTable(data: BootstrapData) {
     btn.addEventListener('click', async () => {
       const saleId = Number(btn.dataset.saleDetailBtn)
       await openSaleDetailModal(saleId)
+    })
+  })
+
+  tableBody.querySelectorAll<HTMLButtonElement>('[data-sale-pdf-btn]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const saleId = Number(btn.dataset.salePdfBtn)
+      await previewReceiptPdf(saleId)
     })
   })
 }
@@ -1841,6 +1853,54 @@ function renderProductSearchResults(query = '') {
   })
 }
 
+function normalizeScannerCode(value: string | null | undefined) {
+  return normalizeSearch(value).replace(/[^a-z0-9]/g, '')
+}
+
+function findSaleProductForScanner(query: string) {
+  if (!bootstrapData) return null
+
+  const normalizedQuery = normalizeSearch(query)
+  const scannerQuery = normalizeScannerCode(query)
+  const activeProducts = bootstrapData.products
+    .filter((product) => isProductActive(product) && Number(product.stock_actual) > 0)
+
+  const codeMatch = activeProducts.find((product) => {
+    const searchableCodes = [product.codigo, product.codigo_barra]
+    return searchableCodes.some((value) => {
+      const normalizedValue = normalizeSearch(value)
+      const scannerValue = normalizeScannerCode(value)
+      return Boolean(normalizedValue) && (
+        normalizedValue === normalizedQuery
+        || (Boolean(scannerValue) && scannerValue === scannerQuery)
+      )
+    })
+  })
+
+  if (codeMatch) {
+    return codeMatch
+  }
+
+  const filtered = activeProducts.filter((product) =>
+    [
+      product.codigo,
+      product.codigo_barra,
+      product.nombre,
+      product.marca_nombre,
+    ].some((value) => normalizeSearch(value).includes(normalizedQuery))
+  )
+
+  return filtered.length === 1 ? filtered[0] : null
+}
+
+function focusSaleProductSearch() {
+  window.setTimeout(() => {
+    const searchInput = document.querySelector<HTMLInputElement>('#sale-product-search')
+    searchInput?.focus()
+    searchInput?.select()
+  }, 0)
+}
+
 function addProductToCart(productId: number) {
   if (!bootstrapData) {
     return
@@ -1863,13 +1923,15 @@ function addProductToCart(productId: number) {
   const nextQuantity = roundMoney((current?.cantidad ?? 0) + 1)
 
   if (nextQuantity > stock) {
-    setStatus('sale-status', `No hay stock suficiente para ${product.nombre}.`, 'error')
+    setSaleCartStatus(`No hay stock suficiente para ${product.nombre}. Disponible: ${formatCurrency(stock)}.`, 'error')
     return
   }
 
   saleCart.set(productId, { product, cantidad: nextQuantity, descuento_unitario: current?.descuento_unitario ?? 0 })
   renderSaleCart()
+  clearSaleCartStatus()
   setStatus('sale-status', `${product.nombre} agregado al carrito.`, 'success')
+  focusSaleProductSearch()
 }
 
 function updateCartQuantity(productId: number, quantity: number) {
@@ -1880,18 +1942,22 @@ function updateCartQuantity(productId: number, quantity: number) {
   }
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
-    setStatus('sale-status', 'La cantidad debe ser mayor que cero.', 'error')
+    setSaleCartStatus(`${item.product.nombre}: la cantidad debe ser mayor que cero.`, 'error')
     renderSaleCart()
     return
   }
 
   if (quantity > Number(item.product.stock_actual)) {
-    setStatus('sale-status', 'La cantidad no puede superar el stock disponible.', 'error')
+    setSaleCartStatus(
+      `Stock insuficiente para ${item.product.nombre}. Disponible: ${formatCurrency(Number(item.product.stock_actual))}.`,
+      'error',
+    )
     renderSaleCart()
     return
   }
 
   saleCart.set(productId, { ...item, cantidad: roundMoney(quantity) })
+  clearSaleCartStatus()
   renderSaleCart()
 }
 
@@ -1903,18 +1969,22 @@ function updateCartDiscount(productId: number, discountUnit: number) {
   }
 
   if (!Number.isFinite(discountUnit) || discountUnit < 0) {
-    setStatus('sale-status', 'El descuento unitario no puede ser negativo.', 'error')
+    setSaleCartStatus(`${item.product.nombre}: el descuento no puede ser negativo.`, 'error')
     renderSaleCart()
     return
   }
 
   if (discountUnit > Number(item.product.precio_venta)) {
-    setStatus('sale-status', 'El descuento unitario no puede superar el precio de venta.', 'error')
+    setSaleCartStatus(
+      `${item.product.nombre}: el descuento no puede superar ${formatCurrency(Number(item.product.precio_venta))}.`,
+      'error',
+    )
     renderSaleCart()
     return
   }
 
   saleCart.set(productId, { ...item, descuento_unitario: roundMoney(discountUnit) })
+  clearSaleCartStatus()
   renderSaleCart()
 }
 
@@ -1994,11 +2064,11 @@ function renderSalePayments() {
     .map((pago, index) => {
       return `
         <tr>
-          <td><strong>${escapeHtml(pago.metodo_nombre)}</strong></td>
-          <td>${escapeHtml(pago.moneda_codigo)}</td>
-          <td>${escapeHtml(formatCurrency(pago.monto))}</td>
-          <td>${escapeHtml(pago.referencia_pago || '-')}</td>
-          <td>
+          <td data-label="Metodo"><strong>${escapeHtml(pago.metodo_nombre)}</strong></td>
+          <td data-label="Moneda">${escapeHtml(pago.moneda_codigo)}</td>
+          <td data-label="Monto">${escapeHtml(formatCurrency(pago.monto))}</td>
+          <td data-label="Referencia">${escapeHtml(pago.referencia_pago || '-')}</td>
+          <td data-label="Accion">
             <button class="button button--small" type="button" data-payment-remove="${index}">Eliminar</button>
           </td>
         </tr>
@@ -2129,26 +2199,26 @@ function renderSaleCart() {
 
       rowsToRender.push(`
         <tr>
-          <td class="excel-row-num" style="text-align: center; font-weight: bold; background: #f1f5f9; color: #64748b; vertical-align: middle;">${index + 1}</td>
-          <td>
+          <td class="excel-row-num" data-label="#" style="text-align: center; font-weight: bold; background: #f1f5f9; color: #64748b; vertical-align: middle;">${index + 1}</td>
+          <td data-label="Producto">
             <strong>${escapeHtml(item.product.nombre)}</strong>
             <small>${escapeHtml(item.product.codigo)} · ${escapeHtml(item.product.marca_nombre)}</small>
           </td>
-          <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(Number(item.product.stock_actual)))}</td>
-          <td class="excel-cell-input" style="padding: 0; vertical-align: middle;">
+          <td data-label="Stock" style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(Number(item.product.stock_actual)))}</td>
+          <td class="excel-cell-input is-editable-cell" data-label="Cantidad" style="padding: 0; vertical-align: middle;">
             <input class="cart-quantity excel-input" type="number" step="0.01" min="0.01" max="${escapeHtml(
               item.product.stock_actual,
             )}" value="${escapeHtml(item.cantidad)}" data-cart-quantity="${item.product.id_producto}" style="text-align: right; width: 100%; height: 100%; border: none; padding: 11px; background: transparent; outline: none;" />
           </td>
-          <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(Number(item.product.precio_venta)))}</td>
-          <td class="excel-cell-input sale-advanced-col" style="padding: 0; vertical-align: middle;">
+          <td data-label="Precio" style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(Number(item.product.precio_venta)))}</td>
+          <td class="excel-cell-input sale-advanced-col is-editable-cell" data-label="Descuento" style="padding: 0; vertical-align: middle;">
             <input class="cart-discount excel-input" type="number" step="0.01" min="0" max="${escapeHtml(
               item.product.precio_venta,
             )}" value="${escapeHtml(item.descuento_unitario ?? 0)}" data-cart-discount="${item.product.id_producto}" style="text-align: right; width: 100%; height: 100%; border: none; padding: 11px; background: transparent; outline: none;" />
           </td>
-          <td class="sale-advanced-col" style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(subtotalLine))}</td>
-          <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(totalLine))}</td>
-          <td style="text-align: center; vertical-align: middle;"><button class="button button--small" type="button" data-cart-remove="${item.product.id_producto}">Eliminar</button></td>
+          <td class="sale-advanced-col" data-label="Subtotal" style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(subtotalLine))}</td>
+          <td data-label="Total" style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(totalLine))}</td>
+          <td data-label="Accion" style="text-align: center; vertical-align: middle;"><button class="button button--small" type="button" data-cart-remove="${item.product.id_producto}">Eliminar</button></td>
         </tr>
       `)
     })
@@ -2238,6 +2308,7 @@ function renderSaleCart() {
     tableBody.querySelectorAll<HTMLButtonElement>('[data-cart-remove]').forEach((button) => {
       button.addEventListener('click', () => {
         saleCart.delete(Number(button.dataset.cartRemove))
+        clearSaleCartStatus()
         renderSaleCart()
       })
     })
@@ -2402,6 +2473,14 @@ function setStatus(targetId: string, message: string, kind: 'info' | 'success' |
   target.textContent = message
   target.dataset.kind = kind
 
+}
+
+function setSaleCartStatus(message: string, kind: 'info' | 'success' | 'error' = 'info') {
+  setStatus('sale-cart-status', message, kind)
+}
+
+function clearSaleCartStatus() {
+  setSaleCartStatus('', 'info')
 }
 
 function getFriendlyErrorMessage(error: unknown, fallback: string) {
@@ -2873,38 +2952,17 @@ async function bootstrap() {
       const query = saleSearchInput.value.trim()
       if (!query || !bootstrapData) return
 
-      const normalizedQuery = normalizeSearch(query)
-      const activeProducts = bootstrapData.products
-        .filter((product) => isProductActive(product) && Number(product.stock_actual) > 0)
-
-      // 1. Try to find exact match by code or barcode
-      let matchedProduct = activeProducts.find(
-        (product) =>
-          normalizeSearch(product.codigo) === normalizedQuery ||
-          (product.codigo_barra && normalizeSearch(product.codigo_barra) === normalizedQuery)
-      )
-
-      // 2. If no exact match, see if there is only one product matching the query in the search results
-      if (!matchedProduct) {
-        const filtered = activeProducts.filter((product) =>
-          [
-            product.codigo,
-            product.codigo_barra,
-            product.nombre,
-            product.marca_nombre,
-          ].some((value) => normalizeSearch(value).includes(normalizedQuery))
-        )
-        if (filtered.length === 1) {
-          matchedProduct = filtered[0]
-        }
-      }
+      const matchedProduct = findSaleProductForScanner(query)
 
       if (matchedProduct) {
         addProductToCart(matchedProduct.id_producto)
         saleSearchInput.value = ''
         renderProductSearchResults('')
       } else {
-        setStatus('sale-status', 'Producto no encontrado o múltiples coincidencias.', 'error')
+        renderProductSearchResults(query)
+        saleSearchInput.focus()
+        saleSearchInput.select()
+        setStatus('sale-status', 'No hay coincidencia exacta. Selecciona el producto de la lista o revisa el codigo.', 'error')
       }
     }
   })
@@ -2915,8 +2973,13 @@ async function bootstrap() {
 
   document.querySelector<HTMLButtonElement>('#sale-cart-clear')?.addEventListener('click', () => {
     saleCart.clear()
+    clearSaleCartStatus()
     renderSaleCart()
     setStatus('sale-status', 'Carrito limpio.', 'info')
+  })
+
+  document.querySelector<HTMLButtonElement>('#sale-quote-pdf-btn')?.addEventListener('click', () => {
+    void previewQuotePdf()
   })
 
   saleForm?.addEventListener('submit', async (event) => {
@@ -3015,6 +3078,7 @@ async function bootstrap() {
       saleCart.clear()
       salePayments.length = 0
       saleForm.reset()
+      clearSaleCartStatus()
       renderSalePayments()
       await refresh()
     } catch (error) {
@@ -3318,9 +3382,7 @@ async function bootstrap() {
 
     reportView?.classList.toggle('show-report-detail', show)
     button.setAttribute('aria-pressed', String(show))
-    button.innerHTML = show
-      ? '<i class="ti ti-eye-off"></i> detalle'
-      : '<i class="ti ti-list-details"></i> Detalle'
+    button.innerHTML = '<i class="ti ti-list-details"></i> Detalle'
 
     if (show && currentSalesReportData) {
       const reportData = currentSalesReportData
@@ -3350,6 +3412,11 @@ async function openSaleDetailModal(saleId: number) {
     const detail = await window.inventoryApi.getSaleDetail(saleId)
     body.innerHTML = `
       <div class="sale-detail-view">
+        <div class="sale-detail-actions">
+          <button class="button button--ghost" type="button" data-sale-receipt-pdf="${detail.id_venta}">
+            <i class="ti ti-file-type-pdf"></i> Recibo PDF
+          </button>
+        </div>
         <div class="sale-detail-grid form-grid">
           <div class="field"><span>Factura</span><strong>${escapeHtml(detail.numero_factura)}</strong></div>
           <div class="field"><span>Fecha</span><strong>${escapeHtml(formatDateTime(detail.fecha_venta))}</strong></div>
@@ -3421,6 +3488,9 @@ async function openSaleDetailModal(saleId: number) {
         </div>
       </div>
     `
+    body.querySelector<HTMLButtonElement>('[data-sale-receipt-pdf]')?.addEventListener('click', async () => {
+      await previewSalePdf(buildReceiptPdfModel(detail))
+    })
     modal.style.display = 'block'
   } catch (error) {
     alert(error instanceof Error ? error.message : 'No se pudo obtener el detalle de la venta.')
@@ -3580,6 +3650,422 @@ function formatMoneyWithCurrency(value: number, currency = 'BOB') {
   return `${prefix} ${formatCurrency(value)}`
 }
 
+type SalePdfLine = {
+  codigo: string
+  nombre: string
+  cantidad: number
+  precioUnitario: number
+  descuento: number
+  total: number
+}
+
+type SalePdfPayment = {
+  metodo: string
+  moneda: string
+  monto: number
+  referencia: string | null
+}
+
+type SalePdfModel = {
+  title: string
+  documentLabel: string
+  number: string
+  date: string
+  customer: string
+  customerDocument?: string | null
+  customerPhone?: string | null
+  seller: string
+  currency: string
+  observation?: string | null
+  lines: SalePdfLine[]
+  payments: SalePdfPayment[]
+  summary: Array<{ label: string; value: string; strong?: boolean }>
+  footer: string
+}
+
+function getSelectText(select: HTMLSelectElement | null) {
+  return select?.selectedOptions[0]?.textContent?.trim() || ''
+}
+
+function buildSalePdfHtml(model: SalePdfModel) {
+  const rows = model.lines.map((line, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>
+        <strong>${escapeHtml(line.nombre)}</strong>
+        <small>${escapeHtml(line.codigo)}</small>
+      </td>
+      <td class="num">${escapeHtml(formatCurrency(line.cantidad))}</td>
+      <td class="num">${escapeHtml(formatMoneyWithCurrency(line.precioUnitario, model.currency))}</td>
+      <td class="num">${escapeHtml(formatMoneyWithCurrency(line.descuento, model.currency))}</td>
+      <td class="num strong">${escapeHtml(formatMoneyWithCurrency(line.total, model.currency))}</td>
+    </tr>
+  `).join('')
+
+  const paymentRows = model.payments.length === 0
+    ? '<tr><td colspan="4" class="empty">Sin pagos registrados.</td></tr>'
+    : model.payments.map((payment) => `
+      <tr>
+        <td>${escapeHtml(payment.metodo)}</td>
+        <td>${escapeHtml(payment.moneda)}</td>
+        <td class="num strong">${escapeHtml(formatMoneyWithCurrency(payment.monto, payment.moneda))}</td>
+        <td>${escapeHtml(payment.referencia || '-')}</td>
+      </tr>
+    `).join('')
+
+  const summaryRows = model.summary.map((item) => `
+    <div class="summary-row ${item.strong ? 'summary-row--strong' : ''}">
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${escapeHtml(item.value)}</strong>
+    </div>
+  `).join('')
+
+  return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(model.title)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #17201d;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .page {
+      padding: 28px;
+    }
+    .header {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+      border-bottom: 3px solid #4f907d;
+      padding-bottom: 16px;
+      margin-bottom: 18px;
+    }
+    .brand h1 {
+      margin: 0;
+      color: #24453a;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    .brand p,
+    .meta p {
+      margin: 3px 0;
+      color: #52635d;
+    }
+    .doc-box {
+      border: 1px solid #b8d6cc;
+      border-radius: 8px;
+      background: #f3faf7;
+      padding: 12px;
+      text-align: right;
+    }
+    .doc-box span {
+      display: block;
+      color: #4f907d;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .doc-box strong {
+      display: block;
+      margin-top: 4px;
+      color: #17201d;
+      font-size: 18px;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .info-card {
+      border: 1px solid #dbe8e3;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .info-card span {
+      display: block;
+      color: #66756f;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .info-card strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 13px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    th {
+      background: #eef7f3;
+      color: #3b6659;
+      font-size: 10px;
+      text-align: left;
+      text-transform: uppercase;
+    }
+    th, td {
+      border-bottom: 1px solid #dbe8e3;
+      padding: 8px;
+      vertical-align: top;
+    }
+    td small {
+      display: block;
+      margin-top: 2px;
+      color: #66756f;
+    }
+    .num { text-align: right; white-space: nowrap; }
+    .strong { font-weight: 800; }
+    .section-title {
+      margin: 18px 0 6px;
+      color: #24453a;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+    .summary {
+      display: grid;
+      gap: 6px;
+      margin-left: auto;
+      margin-top: 14px;
+      width: 280px;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid #dbe8e3;
+      padding: 5px 0;
+    }
+    .summary-row--strong {
+      border-bottom: 0;
+      border-radius: 8px;
+      background: #24453a;
+      color: #ffffff;
+      padding: 9px 10px;
+      font-size: 14px;
+    }
+    .note {
+      margin-top: 16px;
+      border: 1px solid #dbe8e3;
+      border-radius: 8px;
+      background: #fbfdfc;
+      padding: 10px;
+      color: #52635d;
+    }
+    .footer {
+      margin-top: 22px;
+      border-top: 1px solid #dbe8e3;
+      padding-top: 10px;
+      color: #66756f;
+      font-size: 11px;
+      text-align: center;
+    }
+    .empty {
+      color: #66756f;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="header">
+      <div class="brand">
+        <h1>Sistema de Lubricantes</h1>
+        <p>Control de ventas, inventario y caja</p>
+        <p>${escapeHtml(model.date)}</p>
+      </div>
+      <div class="doc-box">
+        <span>${escapeHtml(model.documentLabel)}</span>
+        <strong>${escapeHtml(model.number)}</strong>
+      </div>
+    </section>
+
+    <section class="info-grid">
+      <div class="info-card">
+        <span>Cliente</span>
+        <strong>${escapeHtml(model.customer)}</strong>
+        <p>${escapeHtml(model.customerDocument || 'Sin documento')}</p>
+        <p>${escapeHtml(model.customerPhone || '')}</p>
+      </div>
+      <div class="info-card">
+        <span>Atendido por</span>
+        <strong>${escapeHtml(model.seller)}</strong>
+        <p>Moneda: ${escapeHtml(model.currency)}</p>
+      </div>
+    </section>
+
+    <h2 class="section-title">Productos</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Producto</th>
+          <th class="num">Cantidad</th>
+          <th class="num">Precio</th>
+          <th class="num">Desc.</th>
+          <th class="num">Total</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <div class="summary">${summaryRows}</div>
+
+    <h2 class="section-title">Pagos</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Metodo</th>
+          <th>Moneda</th>
+          <th class="num">Monto</th>
+          <th>Referencia</th>
+        </tr>
+      </thead>
+      <tbody>${paymentRows}</tbody>
+    </table>
+
+    ${model.observation ? `<div class="note"><strong>Nota:</strong> ${escapeHtml(model.observation)}</div>` : ''}
+    <div class="footer">${escapeHtml(model.footer)}</div>
+  </main>
+</body>
+</html>`
+}
+
+async function previewSalePdf(model: SalePdfModel, statusTarget = 'sale-status') {
+  try {
+    await window.inventoryApi.previewPdf({
+      title: model.title,
+      fileName: `${model.documentLabel}-${model.number}`,
+      html: buildSalePdfHtml(model),
+    })
+    setStatus(statusTarget, `${model.documentLabel} PDF abierto.`, 'success')
+  } catch (error) {
+    setStatus(statusTarget, getFriendlyErrorMessage(error, 'No se pudo generar el PDF.'), 'error')
+  }
+}
+
+function buildQuotePdfModel(): SalePdfModel | null {
+  if (!bootstrapData || saleCart.size === 0) {
+    setStatus('sale-status', 'Agrega productos antes de generar una cotizacion.', 'error')
+    return null
+  }
+
+  const saleForm = document.querySelector<HTMLFormElement>('#sale-form')
+  const clientSelect = saleForm?.elements.namedItem('id_cliente') as HTMLSelectElement | null
+  const sellerSelect = saleForm?.elements.namedItem('id_vendedor') as HTMLSelectElement | null
+  const observationInput = saleForm?.elements.namedItem('observacion') as HTMLTextAreaElement | null
+  const snapshot = getSaleFinancialSnapshot()
+  const now = new Date()
+  const quoteNumber = `COT-${toDateInputValue(now).replaceAll('-', '')}-${String(now.getTime()).slice(-5)}`
+  const lines = Array.from(saleCart.values()).map((item) => {
+    const price = roundMoney(Number(item.product.precio_venta))
+    const discount = roundMoney((item.descuento_unitario ?? 0) * item.cantidad)
+    return {
+      codigo: item.product.codigo,
+      nombre: item.product.nombre,
+      cantidad: item.cantidad,
+      precioUnitario: price,
+      descuento: discount,
+      total: roundMoney(price * item.cantidad - discount),
+    }
+  })
+
+  const summary = [
+    { label: 'Subtotal', value: formatMoneyWithCurrency(snapshot.subtotal, snapshot.saleCurrencyCode) },
+    { label: 'Descuento', value: formatMoneyWithCurrency(snapshot.validDiscountTotal, snapshot.saleCurrencyCode) },
+    { label: 'Total estimado', value: formatMoneyWithCurrency(snapshot.total, snapshot.saleCurrencyCode), strong: true },
+  ]
+
+  if (salePayments.length > 0) {
+    summary.splice(2, 0, {
+      label: 'Pagado',
+      value: formatMoneyWithCurrency(snapshot.paid, snapshot.saleCurrencyCode),
+    })
+    summary.splice(3, 0, {
+      label: 'Saldo',
+      value: formatMoneyWithCurrency(snapshot.pending, snapshot.saleCurrencyCode),
+    })
+  }
+
+  return {
+    title: 'Cotizacion de venta',
+    documentLabel: 'Cotizacion',
+    number: quoteNumber,
+    date: formatDateTime(now.toISOString()),
+    customer: getSelectText(clientSelect) || 'Consumidor final',
+    seller: getSelectText(sellerSelect) || currentUser?.nombres || currentUser?.username || 'Vendedor',
+    currency: snapshot.saleCurrencyCode,
+    observation: observationInput?.value.trim() || null,
+    lines,
+    payments: salePayments.map((payment) => ({
+      metodo: payment.metodo_nombre,
+      moneda: payment.moneda_codigo,
+      monto: payment.monto,
+      referencia: payment.referencia_pago,
+    })),
+    summary,
+    footer: 'Cotizacion referencial. La venta se descuenta de inventario solo al confirmarla.',
+  }
+}
+
+function buildReceiptPdfModel(detail: SaleFullDetail): SalePdfModel {
+  return {
+    title: `Recibo ${detail.numero_factura}`,
+    documentLabel: 'Recibo',
+    number: detail.numero_factura,
+    date: formatDateTime(detail.fecha_venta),
+    customer: detail.cliente_nombre || 'Consumidor final',
+    customerDocument: detail.cliente_documento,
+    customerPhone: detail.cliente_telefono,
+    seller: detail.vendedor_nombre,
+    currency: detail.moneda_codigo,
+    observation: detail.observacion,
+    lines: detail.detalles.map((line) => ({
+      codigo: line.codigo,
+      nombre: line.nombre,
+      cantidad: line.cantidad,
+      precioUnitario: line.precio_unitario,
+      descuento: roundMoney(line.descuento_unitario * line.cantidad),
+      total: line.total_linea,
+    })),
+    payments: detail.pagos.map((payment) => ({
+      metodo: payment.metodo_pago,
+      moneda: payment.moneda_codigo,
+      monto: payment.monto,
+      referencia: payment.referencia_pago,
+    })),
+    summary: [
+      { label: 'Subtotal', value: formatMoneyWithCurrency(detail.subtotal, detail.moneda_codigo) },
+      { label: 'Descuento', value: formatMoneyWithCurrency(detail.descuento_total, detail.moneda_codigo) },
+      { label: 'Total', value: formatMoneyWithCurrency(detail.total, detail.moneda_codigo), strong: true },
+    ],
+    footer: 'Gracias por su compra.',
+  }
+}
+
+async function previewQuotePdf() {
+  const model = buildQuotePdfModel()
+  if (model) {
+    await previewSalePdf(model)
+  }
+}
+
+async function previewReceiptPdf(saleId: number, statusTarget = 'sale-status') {
+  try {
+    const detail = await window.inventoryApi.getSaleDetail(saleId)
+    await previewSalePdf(buildReceiptPdfModel(detail), statusTarget)
+  } catch (error) {
+    setStatus(statusTarget, getFriendlyErrorMessage(error, 'No se pudo generar el recibo.'), 'error')
+  }
+}
+
 function renderSalesReportCharts(reportData: SalesReportData) {
   renderBrandChart('brand-chart-container', reportData.charts.brands)
   renderShiftChart('shift-chart-container', reportData.charts.shifts)
@@ -3670,18 +4156,18 @@ async function loadSalesReportData() {
       } else {
         profitsBody.innerHTML = reportData.profitReport.map(row => `
           <tr>
-            <td><strong>${escapeHtml(row.numero_factura)}</strong></td>
-            <td>${escapeHtml(row.fecha_venta.slice(0, 16).replace('T', ' '))}</td>
-            <td>${escapeHtml(row.vendedor)}</td>
-            <td>${escapeHtml(row.turno)}</td>
-            <td style="text-align: right;">${escapeHtml(formatCurrency(row.cantidad_total))}</td>
-            <td style="text-align: right; font-weight: bold;">${escapeHtml(formatMoneyWithCurrency(row.total, row.moneda))}</td>
-            <td style="text-align: right; color: var(--muted);">${escapeHtml(formatMoneyWithCurrency(row.costo, row.moneda))}</td>
-            <td style="text-align: right; color: var(--success); font-weight: bold;">${escapeHtml(formatMoneyWithCurrency(row.ganancia, row.moneda))}</td>
-            <td style="text-align: right; color: var(--accent); font-weight: bold;">${escapeHtml(formatCurrency(row.margen))}%</td>
-            <td style="text-align: right;">${escapeHtml(formatMoneyWithCurrency(row.pagos_recibidos, row.moneda))}</td>
-            <td style="text-align: center;"><span class="badge ${getStatusBadgeClass(row.estado)}">${escapeHtml(row.estado)}</span></td>
-            <td style="text-align: center;"><button class="button button--small button--ghost" type="button" data-sale-detail-btn="${row.id_venta}"><i class="ti ti-eye"></i></button></td>
+            <td data-label="Factura"><strong>${escapeHtml(row.numero_factura)}</strong></td>
+            <td data-label="Fecha">${escapeHtml(row.fecha_venta.slice(0, 16).replace('T', ' '))}</td>
+            <td data-label="Vendedor">${escapeHtml(row.vendedor)}</td>
+            <td data-label="Turno">${escapeHtml(row.turno)}</td>
+            <td data-label="Items" style="text-align: right;">${escapeHtml(formatCurrency(row.cantidad_total))}</td>
+            <td data-label="Total" style="text-align: right; font-weight: bold;">${escapeHtml(formatMoneyWithCurrency(row.total, row.moneda))}</td>
+            <td data-label="Costo" style="text-align: right; color: var(--muted);">${escapeHtml(formatMoneyWithCurrency(row.costo, row.moneda))}</td>
+            <td data-label="Ganancia" style="text-align: right; color: var(--success); font-weight: bold;">${escapeHtml(formatMoneyWithCurrency(row.ganancia, row.moneda))}</td>
+            <td data-label="Margen" style="text-align: right; color: var(--accent); font-weight: bold;">${escapeHtml(formatCurrency(row.margen))}%</td>
+            <td data-label="Caja" style="text-align: right;">${escapeHtml(formatMoneyWithCurrency(row.pagos_recibidos, row.moneda))}</td>
+            <td data-label="Estado" style="text-align: center;"><span class="badge ${getStatusBadgeClass(row.estado)}">${escapeHtml(row.estado)}</span></td>
+            <td data-label="Detalle" style="text-align: center;"><button class="button button--small button--ghost" type="button" data-sale-detail-btn="${row.id_venta}"><i class="ti ti-eye"></i></button></td>
           </tr>
         `).join('')
       }
@@ -3694,12 +4180,12 @@ async function loadSalesReportData() {
       } else {
         cashflowBody.innerHTML = reportData.cashFlowReport.map(row => `
           <tr>
-            <td><strong>${escapeHtml(row.metodo_pago)}</strong></td>
-            <td>${escapeHtml(row.moneda)}</td>
-            <td style="text-align: right; font-weight: bold; color: var(--success);">${escapeHtml(formatMoneyWithCurrency(row.total_recibido, row.moneda))}</td>
-            <td style="text-align: center;">${escapeHtml(row.transacciones_count)}</td>
-            <td style="text-align: center;">${escapeHtml(row.ventas_count)}</td>
-            <td style="text-align: center;">${row.sin_referencia_count > 0 ? `<span class="badge badge--soft">${escapeHtml(row.sin_referencia_count)}</span>` : '0'}</td>
+            <td data-label="Metodo"><strong>${escapeHtml(row.metodo_pago)}</strong></td>
+            <td data-label="Moneda">${escapeHtml(row.moneda)}</td>
+            <td data-label="Recibido" style="text-align: right; font-weight: bold; color: var(--success);">${escapeHtml(formatMoneyWithCurrency(row.total_recibido, row.moneda))}</td>
+            <td data-label="Pagos" style="text-align: center;">${escapeHtml(row.transacciones_count)}</td>
+            <td data-label="Ventas" style="text-align: center;">${escapeHtml(row.ventas_count)}</td>
+            <td data-label="Sin ref." style="text-align: center;">${row.sin_referencia_count > 0 ? `<span class="badge badge--soft">${escapeHtml(row.sin_referencia_count)}</span>` : '0'}</td>
           </tr>
         `).join('')
       }
@@ -3712,15 +4198,15 @@ async function loadSalesReportData() {
       } else {
         cashflowSalesBody.innerHTML = reportData.cashFlowBySale.map(row => `
           <tr>
-            <td><strong>${escapeHtml(row.numero_factura)}</strong></td>
-            <td>${escapeHtml(row.cliente)}</td>
-            <td>${escapeHtml(row.vendedor)}</td>
-            <td style="text-align: right;">${escapeHtml(formatMoneyWithCurrency(row.total_vendido, row.moneda))}</td>
-            <td style="text-align: right; color: var(--success); font-weight: 700;">${escapeHtml(formatMoneyWithCurrency(row.total_recibido, row.moneda))}</td>
-            <td style="text-align: right; color: ${row.saldo_pendiente > 0 ? 'var(--danger)' : 'var(--muted)'};">${escapeHtml(formatMoneyWithCurrency(row.saldo_pendiente, row.moneda))}</td>
-            <td style="text-align: right;">${escapeHtml(formatMoneyWithCurrency(row.cambio, row.moneda))}</td>
-            <td>${escapeHtml(row.metodos_pago)}</td>
-            <td style="text-align: center;"><span class="badge ${getStatusBadgeClass(row.estado)}">${escapeHtml(row.estado)}</span></td>
+            <td data-label="Factura"><strong>${escapeHtml(row.numero_factura)}</strong></td>
+            <td data-label="Cliente">${escapeHtml(row.cliente)}</td>
+            <td data-label="Vendedor">${escapeHtml(row.vendedor)}</td>
+            <td data-label="Vendido" style="text-align: right;">${escapeHtml(formatMoneyWithCurrency(row.total_vendido, row.moneda))}</td>
+            <td data-label="Recibido" style="text-align: right; color: var(--success); font-weight: 700;">${escapeHtml(formatMoneyWithCurrency(row.total_recibido, row.moneda))}</td>
+            <td data-label="Pendiente" style="text-align: right; color: ${row.saldo_pendiente > 0 ? 'var(--danger)' : 'var(--muted)'};">${escapeHtml(formatMoneyWithCurrency(row.saldo_pendiente, row.moneda))}</td>
+            <td data-label="Cambio" style="text-align: right;">${escapeHtml(formatMoneyWithCurrency(row.cambio, row.moneda))}</td>
+            <td data-label="Metodos">${escapeHtml(row.metodos_pago)}</td>
+            <td data-label="Estado" style="text-align: center;"><span class="badge ${getStatusBadgeClass(row.estado)}">${escapeHtml(row.estado)}</span></td>
           </tr>
         `).join('')
       }

@@ -246,7 +246,9 @@ body {
   background: rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
   padding: 16px;
+  min-width: 0;
   min-height: calc(100vh - 120px);
+  overflow-x: hidden;
 }
 
 .clock-card {
@@ -763,9 +765,10 @@ body {
 
 .sales-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(420px, 0.65fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
   gap: 12px;
   align-items: start;
+  min-width: 0;
 }
 
 .module-card {
@@ -774,6 +777,7 @@ body {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 10px 28px rgba(47, 91, 78, 0.05);
   padding: 14px;
+  min-width: 0;
 }
 
 .module-card--wide {
@@ -971,6 +975,7 @@ body {
 .field {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .field--inline {
@@ -986,6 +991,7 @@ body {
 .field select,
 .field textarea,
 .field output {
+  min-width: 0;
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1185,6 +1191,62 @@ body {
 .sale-form {
   display: grid;
   gap: 12px;
+  min-width: 0;
+}
+
+.sale-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 2px;
+}
+
+.sale-section-heading > span {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.sale-section-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.22rem;
+  line-height: 1.1;
+}
+
+.sale-section-heading small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.sale-context-status {
+  margin: 0;
+  min-height: 0;
+  border-radius: 10px;
+  padding: 0;
+}
+
+.sale-context-status:not(:empty) {
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  background: #fbfdfc;
+  padding: 10px 12px;
+  font-weight: 700;
+}
+
+.sale-context-status[data-kind='error']:not(:empty) {
+  border-color: #f6c7d1;
+  background: #fff5f7;
 }
 
 .sale-guide {
@@ -1394,6 +1456,7 @@ body {
 .sale-product-search {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .product-results {
@@ -1407,6 +1470,7 @@ body {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1425,6 +1489,7 @@ body {
 .product-result strong,
 .product-result small {
   display: block;
+  overflow-wrap: anywhere;
 }
 
 .product-result small {
@@ -1447,8 +1512,27 @@ body {
   color: var(--muted);
 }
 
+.sale-table-actions,
+.sale-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sale-detail-actions {
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
 .cart-wrap .data-table {
   min-width: 900px;
+}
+
+.sales-register,
+.sales-register .table-wrap,
+.sales-register .form-grid,
+.sales-register .card-subgroup {
+  min-width: 0;
 }
 
 .cart-table {
@@ -1460,6 +1544,37 @@ body {
   border: 1px solid #cbd5e1;
   padding: 10px;
   vertical-align: middle;
+}
+
+.cart-table th.cart-editable-heading {
+  border-top: 3px solid var(--accent);
+  background: #eaf8f3;
+  color: #24453a;
+}
+
+.cart-editable-heading span {
+  display: block;
+  margin-top: 2px;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.cart-table .is-editable-cell {
+  background: #f6fffb;
+  box-shadow: inset 0 0 0 2px rgba(112, 179, 158, 0.28);
+}
+
+.cart-table .is-editable-cell .excel-input {
+  color: var(--text);
+  font-weight: 900;
+  background: #ffffff !important;
+}
+
+.cart-table .is-editable-cell:focus-within {
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .cart-table td:focus-within {
@@ -1540,6 +1655,145 @@ body {
   margin-top: 4px;
 }
 
+@media (max-width: 1380px) {
+  .sales-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-layout > .module-card {
+    width: 100%;
+  }
+}
+
+@media (max-width: 980px) {
+  .sales-register .table-wrap,
+  .sales-layout > .module-card:last-child .table-wrap,
+  .payments-list-container .table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .cart-wrap .data-table,
+  .payments-list-container .data-table,
+  #sales-table {
+    min-width: 0;
+  }
+
+  .cart-table,
+  #sale-payments-table,
+  #sales-table {
+    display: block;
+    border-collapse: separate;
+  }
+
+  .cart-table thead,
+  #sale-payments-table thead,
+  #sales-table thead {
+    display: none;
+  }
+
+  .cart-table tbody,
+  #sale-payments-table tbody,
+  #sales-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .cart-table tr,
+  #sale-payments-table tr,
+  #sales-table tr {
+    display: grid;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 10px;
+  }
+
+  .cart-table td,
+  #sale-payments-table td,
+  #sales-table td {
+    display: grid;
+    grid-template-columns: minmax(96px, 0.4fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-bottom: 1px solid #edf4f1;
+    padding: 0 0 8px;
+    text-align: right !important;
+    overflow-wrap: anywhere;
+  }
+
+  .cart-table td:last-child,
+  #sale-payments-table td:last-child,
+  #sales-table td:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .cart-table td::before,
+  #sale-payments-table td::before,
+  #sales-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .cart-table td[data-label='Producto'],
+  #sales-table td[data-label='Factura'] {
+    grid-template-columns: 1fr;
+    text-align: left !important;
+  }
+
+  .cart-table td[data-label='Producto']::before,
+  #sales-table td[data-label='Factura']::before {
+    display: none;
+  }
+
+  .cart-table .excel-cell-input {
+    padding: 0 !important;
+  }
+
+  .cart-table .excel-input {
+    min-height: 38px;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px;
+    background: #fbfdfc !important;
+  }
+
+  .cart-table .is-editable-cell {
+    border-color: rgba(112, 179, 158, 0.45);
+    background: #f6fffb;
+  }
+
+  .cart-table .sale-cart-empty {
+    display: block;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+  }
+
+  .cart-table .sale-cart-empty::before {
+    content: none;
+  }
+
+  .sale-table-actions,
+  .sale-detail-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sale-table-actions .button,
+  .sale-detail-actions .button,
+  #sale-payments-table .button,
+  .cart-table [data-cart-remove] {
+    width: 100%;
+  }
+}
+
 .mini-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1608,7 +1862,7 @@ body {
 
 @media (max-width: 760px) {
   .shell {
-    padding: 10px;
+    padding: 8px;
   }
 
   .shell-body {
@@ -1620,6 +1874,11 @@ body {
   }
 
   .workspace {
+    padding: 8px;
+  }
+
+  .module-card {
+    border-radius: 10px;
     padding: 10px;
   }
 
@@ -1640,6 +1899,23 @@ body {
 
   .module-card__header {
     flex-direction: column;
+  }
+
+  .module-card__header .row-actions,
+  .form-actions {
+    width: 100%;
+  }
+
+  .row-actions,
+  .form-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .row-actions .button,
+  .form-actions .button {
+    justify-content: center;
+    width: 100%;
   }
 
   .tabs__button {
@@ -1666,20 +1942,222 @@ body {
   }
 
   .sale-summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .sale-guide {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 8px;
   }
 
   .sale-guide__step strong {
+    font-size: 0.75rem;
     white-space: normal;
+  }
+
+  .sale-guide__step {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .sale-guide__step span {
+    width: 22px;
+    height: 22px;
+  }
+
+  .sale-guide p {
+    font-size: 0.82rem;
+  }
+
+  .sale-section-heading {
+    align-items: flex-start;
+  }
+
+  .sale-section-heading h3 {
+    font-size: 1.08rem;
+  }
+
+  .sale-section-heading > span {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    font-size: 0.8rem;
   }
 
   .payment-adder__header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .client-quick-form {
+    padding: 12px;
+  }
+
+  .client-quick-form__header {
+    align-items: flex-start;
+  }
+
+  .sale-header-fields {
+    padding: 10px;
+  }
+
+  .product-results {
+    max-height: none;
+  }
+
+  .product-result {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cart-wrap,
+  .payments-list-container .table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .cart-wrap .data-table,
+  .payments-list-container .data-table {
+    min-width: 0;
+  }
+
+  .cart-table,
+  #sale-payments-table {
+    display: block;
+    border-collapse: separate;
+  }
+
+  .cart-table thead,
+  #sale-payments-table thead {
+    display: none;
+  }
+
+  .cart-table tbody,
+  #sale-payments-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .cart-table tr,
+  #sale-payments-table tr {
+    display: grid;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 10px;
+  }
+
+  .cart-table td,
+  #sale-payments-table td {
+    display: grid;
+    grid-template-columns: minmax(90px, 0.42fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-bottom: 1px solid #edf4f1;
+    padding: 0 0 8px;
+    text-align: right !important;
+  }
+
+  .cart-table td:last-child,
+  #sale-payments-table td:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .cart-table td::before,
+  #sale-payments-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .cart-table td[data-label='Producto'] {
+    grid-template-columns: 1fr;
+    text-align: left !important;
+  }
+
+  .cart-table td[data-label='Producto']::before {
+    display: none;
+  }
+
+  .cart-table .excel-cell-input {
+    padding: 0 !important;
+  }
+
+  .cart-table .excel-input {
+    min-height: 38px;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px;
+    background: #fbfdfc !important;
+  }
+
+  .cart-table .is-editable-cell {
+    border-color: rgba(112, 179, 158, 0.45);
+    background: #f6fffb;
+  }
+
+  .cart-table .sale-cart-empty {
+    display: block;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+  }
+
+  .cart-table .sale-cart-empty::before {
+    content: none;
+  }
+
+  .sale-table-actions,
+  .sale-detail-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sale-table-actions .button,
+  .sale-detail-actions .button,
+  #sale-payments-table .button,
+  .cart-table [data-cart-remove] {
+    width: 100%;
+  }
+
+  .payment-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .card-subgroup {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sale-summary,
+  .sale-guide {
+    grid-template-columns: 1fr;
+  }
+
+  .sale-guide__step {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .cart-table td,
+  #sale-payments-table td,
+  #sales-table td {
+    grid-template-columns: 1fr;
+    text-align: left !important;
+  }
+
+  .cart-table td::before,
+  #sale-payments-table td::before,
+  #sales-table td::before {
+    margin-bottom: -2px;
   }
 }
 
@@ -2168,6 +2646,71 @@ body {
   align-items: flex-start;
   margin-bottom: 20px;
   gap: 20px;
+  min-width: 0;
+}
+
+.report-toolbar__intro {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+}
+
+.report-toolbar__visual {
+  width: 128px;
+  height: auto;
+  overflow: visible;
+}
+
+.report-visual__shadow {
+  fill: none;
+  stroke: rgba(47, 91, 78, 0.18);
+  stroke-linecap: round;
+  stroke-width: 6;
+}
+
+.report-visual__paper,
+.report-visual__cash {
+  fill: #ffffff;
+  stroke: #b8d6cc;
+  stroke-width: 2;
+}
+
+.report-visual__grid {
+  fill: none;
+  stroke: #8fbbae;
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.report-visual__line {
+  fill: none;
+  stroke: url(#reportVisualCash);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 5;
+}
+
+.report-visual__dot,
+.report-visual__coin {
+  fill: #ffffff;
+  stroke: #0284c7;
+  stroke-width: 3;
+}
+
+.report-visual__can {
+  fill: url(#reportVisualOil);
+  stroke: #24453a;
+  stroke-width: 2;
+}
+
+.report-visual__cap {
+  fill: #24453a;
+}
+
+.report-visual__cash {
+  fill: #eef8f5;
 }
 
 .report-toolbar__title {
@@ -2192,6 +2735,7 @@ body {
   border-radius: 10px;
   background: var(--surface);
   padding: 12px;
+  min-width: 0;
 }
 
 .report-presets {
@@ -2202,6 +2746,7 @@ body {
   border-radius: 9px;
   background: var(--surface-alt);
   padding: 4px;
+  min-width: 0;
 }
 
 .report-preset-btn {
@@ -2230,6 +2775,15 @@ body {
   align-items: flex-end;
   justify-content: flex-end;
   max-width: 920px;
+  min-width: 0;
+}
+
+.report-toolbar__filters .field {
+  flex: 1 1 160px;
+}
+
+.report-toolbar__filters .button {
+  flex: 0 0 auto;
 }
 
 .report-view:not(.show-report-filters) .report-advanced-filter,
@@ -2248,7 +2802,7 @@ body {
 
 .report-kpis-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -2263,6 +2817,7 @@ body {
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-width: 0;
 }
 
 .kpi-card:hover {
@@ -2317,6 +2872,7 @@ body {
 .kpi-card__content {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .kpi-card__label {
@@ -2332,6 +2888,7 @@ body {
   font-weight: 800;
   margin-top: 4px;
   color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 /* KPI Card Theme Colors via Left Borders */
@@ -2379,12 +2936,14 @@ body {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
   gap: 24px;
+  min-width: 0;
 }
 
 .report-tables-section {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-width: 0;
 }
 
 /* Secondary Tab Controls */
@@ -2393,9 +2952,13 @@ body {
   border-bottom: 2px solid var(--border);
   gap: 16px;
   margin-bottom: 4px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .report-subtab-btn {
+  flex: 0 0 auto;
   background: transparent;
   border: none;
   border-bottom: 3px solid transparent;
@@ -2433,6 +2996,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-width: 0;
 }
 
 .chart-card {
@@ -2450,7 +3014,8 @@ body {
   border-radius: 8px;
   padding: 14px;
   margin-top: 12px;
-  overflow: visible;
+  overflow: hidden;
+  min-width: 0;
 }
 
 /* SVG Chart Elements */
@@ -2560,6 +3125,201 @@ body {
     justify-content: flex-start;
     max-width: none;
   }
+
+  .report-toolbar__filters .button {
+    flex: 1 1 180px;
+  }
+}
+
+@media (max-width: 860px) {
+  .report-kpis-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-insights {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .report-view .table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  #report-profits-table,
+  #report-cashflow-table,
+  #report-cashflow-sales-table {
+    display: block;
+    min-width: 0;
+    border-collapse: separate;
+  }
+
+  #report-profits-table thead,
+  #report-cashflow-table thead,
+  #report-cashflow-sales-table thead {
+    display: none;
+  }
+
+  #report-profits-table tbody,
+  #report-cashflow-table tbody,
+  #report-cashflow-sales-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  #report-profits-table tr,
+  #report-cashflow-table tr,
+  #report-cashflow-sales-table tr {
+    display: grid;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 10px;
+  }
+
+  #report-profits-table td,
+  #report-cashflow-table td,
+  #report-cashflow-sales-table td {
+    display: grid;
+    grid-template-columns: minmax(96px, 0.42fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-bottom: 1px solid #edf4f1;
+    padding: 0 0 8px;
+    text-align: right !important;
+    overflow-wrap: anywhere;
+  }
+
+  #report-profits-table td:last-child,
+  #report-cashflow-table td:last-child,
+  #report-cashflow-sales-table td:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  #report-profits-table td::before,
+  #report-cashflow-table td::before,
+  #report-cashflow-sales-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  #report-profits-table .empty-state,
+  #report-cashflow-table .empty-state,
+  #report-cashflow-sales-table .empty-state {
+    display: block;
+    border-bottom: 0;
+    padding: 14px;
+    text-align: center !important;
+  }
+
+  #report-profits-table .empty-state::before,
+  #report-cashflow-table .empty-state::before,
+  #report-cashflow-sales-table .empty-state::before {
+    content: none;
+  }
+
+  #report-profits-table td[data-label='Factura'],
+  #report-cashflow-table td[data-label='Metodo'],
+  #report-cashflow-sales-table td[data-label='Factura'] {
+    grid-template-columns: 1fr;
+    text-align: left !important;
+  }
+
+  #report-profits-table td[data-label='Factura']::before,
+  #report-cashflow-table td[data-label='Metodo']::before,
+  #report-cashflow-sales-table td[data-label='Factura']::before {
+    display: none;
+  }
+
+  .chart-container {
+    min-height: 240px;
+    padding: 10px;
+  }
+}
+
+@media (max-width: 560px) {
+  .report-toolbar {
+    gap: 12px;
+  }
+
+  .report-toolbar__intro {
+    grid-template-columns: 74px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .report-toolbar__visual {
+    width: 74px;
+  }
+
+  .report-toolbar .row-actions {
+    width: 100%;
+  }
+
+  .report-control-panel {
+    padding: 10px;
+  }
+
+  .report-presets {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .report-preset-btn {
+    padding: 9px 6px;
+  }
+
+  .report-toolbar__filters {
+    gap: 10px;
+  }
+
+  .report-toolbar__filters .field,
+  .report-toolbar__filters .button {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .report-kpis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-card {
+    align-items: flex-start;
+  }
+
+  .report-subtabs {
+    gap: 8px;
+  }
+
+  .report-subtab-btn {
+    max-width: 78vw;
+    white-space: normal;
+    text-align: left;
+  }
+
+  #report-profits-table td,
+  #report-cashflow-table td,
+  #report-cashflow-sales-table td {
+    grid-template-columns: 1fr;
+    text-align: left !important;
+  }
+
+  #report-profits-table td::before,
+  #report-cashflow-table td::before,
+  #report-cashflow-sales-table td::before {
+    margin-bottom: -2px;
+  }
+
+  .chart-container {
+    min-height: 260px;
+  }
 }
 
 /* =========================================
@@ -2591,6 +3351,7 @@ body {
 :root[data-theme='dark'] .weather-card__metrics strong,
 :root[data-theme='dark'] .quick-action-card strong,
 :root[data-theme='dark'] .home-info-card strong,
+:root[data-theme='dark'] .sale-section-heading h3,
 :root[data-theme='dark'] .client-quick-form__header h3 {
   color: var(--text);
 }
@@ -2630,6 +3391,7 @@ body {
 :root[data-theme='dark'] .sale-guide,
 :root[data-theme='dark'] .sale-guide__step,
 :root[data-theme='dark'] .sale-cart-empty,
+:root[data-theme='dark'] .sale-context-status:not(:empty),
 :root[data-theme='dark'] .report-control-panel,
 :root[data-theme='dark'] .report-presets,
 :root[data-theme='dark'] .client-picker__search,
@@ -2661,6 +3423,26 @@ body {
   background: var(--surface);
 }
 
+:root[data-theme='dark'] .report-visual__paper,
+:root[data-theme='dark'] .report-visual__cash {
+  fill: var(--surface);
+  stroke: var(--border);
+}
+
+:root[data-theme='dark'] .report-visual__grid {
+  stroke: #6fa897;
+}
+
+:root[data-theme='dark'] .report-visual__dot,
+:root[data-theme='dark'] .report-visual__coin {
+  fill: var(--surface-alt);
+  stroke: #5fb3d3;
+}
+
+:root[data-theme='dark'] .report-visual__cap {
+  fill: #d8eee7;
+}
+
 :root[data-theme='dark'] .quick-action-card:hover,
 :root[data-theme='dark'] .product-result:hover {
   background: var(--surface-soft);
@@ -2669,6 +3451,29 @@ body {
 :root[data-theme='dark'] .data-table th {
   border-color: var(--border);
   background: #1a2b27;
+}
+
+:root[data-theme='dark'] .cart-table th.cart-editable-heading,
+:root[data-theme='dark'] .cart-table .is-editable-cell {
+  border-color: rgba(120, 196, 173, 0.38);
+  background: rgba(120, 196, 173, 0.11);
+}
+
+:root[data-theme='dark'] .cart-table th.cart-editable-heading {
+  color: #e9fbf5;
+}
+
+:root[data-theme='dark'] .cart-editable-heading span {
+  color: #78e4ca;
+}
+
+:root[data-theme='dark'] .cart-table .is-editable-cell .excel-input {
+  color: #f2fffb;
+  background: #102820 !important;
+}
+
+:root[data-theme='dark'] .cart-table .is-editable-cell:focus-within {
+  box-shadow: inset 0 0 0 2px #78e4ca;
 }
 
 :root[data-theme='dark'] .data-table td {
@@ -2681,9 +3486,107 @@ body {
 :root[data-theme='dark'] .metric-badge,
 :root[data-theme='dark'] .sale-summary div,
 :root[data-theme='dark'] .shift-state,
-:root[data-theme='dark'] .comparison-item {
+:root[data-theme='dark'] .comparison-item,
+:root[data-theme='dark'] .cart-table tr,
+:root[data-theme='dark'] #sale-payments-table tr,
+:root[data-theme='dark'] #sales-table tr,
+:root[data-theme='dark'] #report-profits-table tr,
+:root[data-theme='dark'] #report-cashflow-table tr,
+:root[data-theme='dark'] #report-cashflow-sales-table tr {
   border-color: var(--border);
   background: var(--surface-alt);
+}
+
+:root[data-theme='dark'] .kpi-card {
+  background: #12211e;
+  border-color: #29443c;
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .kpi-card__label,
+:root[data-theme='dark'] .metric-badge span,
+:root[data-theme='dark'] .sale-summary span {
+  color: #a9c9c0;
+}
+
+:root[data-theme='dark'] .kpi-card__value,
+:root[data-theme='dark'] .metric-badge strong,
+:root[data-theme='dark'] .sale-summary strong {
+  color: #f2fffb;
+}
+
+:root[data-theme='dark'] .kpi-card__icon {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e9fbf5;
+}
+
+:root[data-theme='dark'] .kpi-card__icon i,
+:root[data-theme='dark'] .kpi-card__icon::before {
+  color: currentColor;
+}
+
+:root[data-theme='dark'] .kpi-card--sales .kpi-card__icon {
+  background: rgba(14, 165, 233, 0.22);
+  color: #8bd7ff;
+}
+
+:root[data-theme='dark'] .kpi-card--cost .kpi-card__icon {
+  background: rgba(249, 115, 22, 0.2);
+  color: #ffc58f;
+}
+
+:root[data-theme='dark'] .kpi-card--profit .kpi-card__icon {
+  background: rgba(34, 197, 94, 0.2);
+  color: #9df2b8;
+}
+
+:root[data-theme='dark'] .kpi-card--cash .kpi-card__icon {
+  background: rgba(139, 92, 246, 0.23);
+  color: #d6c4ff;
+}
+
+:root[data-theme='dark'] .kpi-card--pending,
+:root[data-theme='dark'] .kpi-card--pending-count {
+  border-left-color: #f59e0b;
+}
+
+:root[data-theme='dark'] .kpi-card--pending .kpi-card__icon,
+:root[data-theme='dark'] .kpi-card--pending-count .kpi-card__icon {
+  background: rgba(245, 158, 11, 0.22);
+  color: #ffe29a;
+}
+
+:root[data-theme='dark'] .kpi-card--discount .kpi-card__icon {
+  background: rgba(244, 63, 94, 0.2);
+  color: #ffb3c0;
+}
+
+:root[data-theme='dark'] .kpi-card--ticket .kpi-card__icon {
+  background: rgba(45, 212, 191, 0.2);
+  color: #9cf5e8;
+}
+
+:root[data-theme='dark'] .kpi-card--margin .kpi-card__icon {
+  background: rgba(99, 102, 241, 0.22);
+  color: #c9d0ff;
+}
+
+:root[data-theme='dark'] .metric-badge,
+:root[data-theme='dark'] .sale-summary div {
+  background: #10201c;
+  border-color: #29443c;
+}
+
+:root[data-theme='dark'] #sale-paid-output {
+  color: #8ff0b0;
+}
+
+:root[data-theme='dark'] #sale-pending-output {
+  color: #ff9aaa;
+}
+
+:root[data-theme='dark'] #sale-change-output {
+  color: #8edfc8;
 }
 
 :root[data-theme='dark'] .client-quick-form {
@@ -2693,6 +3596,11 @@ body {
 
 :root[data-theme='dark'] .excel-input:focus {
   background-color: #213b33 !important;
+}
+
+:root[data-theme='dark'] .cart-table .excel-row-num {
+  background: #1a2b27 !important;
+  color: #a9c9c0 !important;
 }
 
 :root[data-theme='dark'] .empty-excel-row td {

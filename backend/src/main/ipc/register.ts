@@ -1,6 +1,9 @@
-import { app, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import type Database from 'better-sqlite3'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { getDatabasePath } from '../db/database'
+import type { PdfPreviewInput } from '../../shared/ipc/contracts'
 import {
   closeInventory,
   createMovement,
@@ -21,6 +24,59 @@ function registerHandler(channel: string, handler: Parameters<typeof ipcMain.han
   ipcMain.handle(channel, handler)
 }
 
+function sanitizePdfFileName(value: string) {
+  const safeName = value
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80)
+
+  return safeName || 'documento'
+}
+
+async function previewPdfDocument(input: PdfPreviewInput) {
+  if (!input.html.trim()) {
+    throw new Error('No hay contenido para generar el PDF.')
+  }
+
+  const outputDir = join(app.getPath('temp'), 'sistema-lubricantes-pdf')
+  await mkdir(outputDir, { recursive: true })
+
+  const baseName = sanitizePdfFileName(input.fileName || input.title || 'documento')
+  const filePath = join(outputDir, `${baseName}-${Date.now()}.pdf`)
+  const pdfWindow = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  })
+
+  try {
+    const encodedHtml = Buffer.from(input.html, 'utf8').toString('base64')
+    await pdfWindow.loadURL(`data:text/html;base64,${encodedHtml}`)
+    const pdfBuffer = await pdfWindow.webContents.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+      margins: { marginType: 'default' },
+    })
+
+    await writeFile(filePath, pdfBuffer)
+    const openError = await shell.openPath(filePath)
+    if (openError) {
+      throw new Error(openError)
+    }
+
+    return { filePath }
+  } finally {
+    if (!pdfWindow.isDestroyed()) {
+      pdfWindow.close()
+    }
+  }
+}
+
 export function registerSystemIpc(database: Database.Database) {
   registerHandler('system:get-app-info', () => {
     return {
@@ -28,6 +84,10 @@ export function registerSystemIpc(database: Database.Database) {
       version: app.getVersion(),
       databasePath: getDatabasePath(),
     }
+  })
+
+  registerHandler('system:preview-pdf', (_event, payload: PdfPreviewInput) => {
+    return previewPdfDocument(payload)
   })
 
   registerHandler('app:get-bootstrap-data', () => {

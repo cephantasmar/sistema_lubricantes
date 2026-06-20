@@ -603,15 +603,29 @@
                       <select name="id_turno" hidden aria-hidden="true" tabindex="-1"></select>
                     </div>
 
+                    <div class="sale-section-heading">
+                      <span>01</span>
+                      <h3>Buscar producto</h3>
+                    </div>
+
                     <div class="sale-product-search">
                       <label class="field">
-                        <span>Buscar producto</span>
+                        <span>Codigo, nombre o marca</span>
                         <input id="sale-product-search" type="search" placeholder="Ej. 20W-50, filtro, codigo o marca" autocomplete="off" />
                         <small>Escribe y presiona Enter. Si ves el producto en la lista, haz clic para agregarlo.</small>
                       </label>
 
                       <div class="product-results" id="sale-product-results"></div>
                     </div>
+
+                    <div class="sale-section-heading sale-section-heading--cart">
+                      <span>02</span>
+                      <div>
+                        <h3>Carrito de venta</h3>
+                        <small>Las columnas resaltadas se pueden editar.</small>
+                      </div>
+                    </div>
+                    <p class="module-status sale-context-status" id="sale-cart-status" role="status"></p>
 
                     <div class="table-wrap cart-wrap">
                       <table class="data-table cart-table" id="sale-cart-table">
@@ -620,9 +634,9 @@
                             <th style="width: 50px; text-align: center;">#</th>
                             <th>Producto</th>
                             <th style="text-align: right;">Stock</th>
-                            <th style="text-align: right; width: 100px;">Cantidad</th>
+                            <th class="cart-editable-heading" style="text-align: right; width: 100px;">Cantidad <span>editable</span></th>
                             <th style="text-align: right;">Precio unitario</th>
-                            <th class="sale-advanced-col" style="text-align: right; width: 100px;">Descuento</th>
+                            <th class="sale-advanced-col cart-editable-heading" style="text-align: right; width: 100px;">Descuento <span>editable</span></th>
                             <th class="sale-advanced-col" style="text-align: right;">Subtotal</th>
                             <th style="text-align: right;">Total linea</th>
                             <th style="text-align: center; width: 90px;">Acciones</th>
@@ -632,10 +646,15 @@
                       </table>
                     </div>
 
+                    <div class="sale-section-heading">
+                      <span>03</span>
+                      <h3>Cobrar venta</h3>
+                    </div>
+
                     <div class="sale-checkout">
                       <div class="payment-adder card-subgroup">
                         <div class="payment-adder__header">
-                          <h3>Cobrar venta</h3>
+                          <h3>Registrar pago</h3>
                           <button class="button button--small button--ghost" id="payment-fill-total" type="button">
                             <i class="ti ti-cash"></i> Cobrar saldo
                           </button>
@@ -725,6 +744,9 @@
 
                       <div class="form-actions">
                         <button class="button button--ghost" id="sale-cart-clear" type="button">Limpiar</button>
+                        <button class="button button--ghost" id="sale-quote-pdf-btn" type="button">
+                          <i class="ti ti-file-description"></i> Cotizacion PDF
+                        </button>
                         <button class="button button--primary" type="submit">Confirmar venta</button>
                       </div>
                     </div>
@@ -762,18 +784,43 @@
               </div>
             </section>
 
-          <section class="tab-panel report-view" data-panel="reportes" role="tabpanel">
+          <section class="tab-panel report-view show-report-detail" data-panel="reportes" role="tabpanel">
             <div class="report-toolbar">
-              <div>
+              <div class="report-toolbar__intro">
+                <svg class="report-toolbar__visual" viewBox="0 0 180 92" aria-hidden="true" focusable="false">
+                  <defs>
+                    <linearGradient id="reportVisualOil" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stop-color="#70b39e" />
+                      <stop offset="100%" stop-color="#4f907d" />
+                    </linearGradient>
+                    <linearGradient id="reportVisualCash" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stop-color="#0ea5a6" />
+                      <stop offset="100%" stop-color="#0284c7" />
+                    </linearGradient>
+                  </defs>
+                  <path class="report-visual__shadow" d="M20 74h138" />
+                  <rect class="report-visual__paper" x="86" y="15" width="54" height="58" rx="8" />
+                  <path class="report-visual__grid" d="M98 31h30M98 43h22M98 55h30" />
+                  <path class="report-visual__line" d="M34 62c12-18 24-7 35-22 8-11 15-16 25-10 9 5 15-2 22-13" />
+                  <circle class="report-visual__dot" cx="34" cy="62" r="4" />
+                  <circle class="report-visual__dot" cx="69" cy="40" r="4" />
+                  <circle class="report-visual__dot" cx="116" cy="17" r="4" />
+                  <path class="report-visual__can" d="M39 22h24l7 12v31c0 5-4 9-9 9H36c-5 0-9-4-9-9V34l12-12Z" />
+                  <path class="report-visual__cap" d="M42 16h17v8H42z" />
+                  <path class="report-visual__cash" d="M127 53h31c4 0 7 3 7 7v13c0 4-3 7-7 7h-31c-4 0-7-3-7-7V60c0-4 3-7 7-7Z" />
+                  <circle class="report-visual__coin" cx="143" cy="66" r="7" />
+                </svg>
+                <div>
                 <span class="module-kicker">Administracion</span>
                 <h2 class="report-toolbar__title">Reportes</h2>
                 <p class="report-toolbar__subtitle">Análisis de rendimiento, ganancias diarias y control de caja.</p>
               </div>
+                </div>
               <div class="row-actions">
                 <button class="button button--ghost" id="report-filter-toggle" type="button" aria-pressed="false">
                   <i class="ti ti-adjustments-horizontal"></i> Filtros
                 </button>
-                <button class="button button--ghost" id="report-detail-toggle" type="button" aria-pressed="false">
+                <button class="button button--ghost" id="report-detail-toggle" type="button" aria-pressed="true">
                   <i class="ti ti-list-details"></i> Detalle
                 </button>
               </div>

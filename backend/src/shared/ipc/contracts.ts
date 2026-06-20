@@ -4,6 +4,16 @@ export type AppInfo = {
   databasePath: string
 }
 
+export type PdfPreviewInput = {
+  title: string
+  fileName?: string | null
+  html: string
+}
+
+export type PdfPreviewResult = {
+  filePath: string
+}
+
 export type ReferenceItem = {
   id: number
   nombre: string
