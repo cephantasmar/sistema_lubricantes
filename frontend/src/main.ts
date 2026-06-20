@@ -1,5 +1,7 @@
 import './style.css'
+import './notifications.css'
 import '@tabler/icons-webfont/dist/tabler-icons.css'
+import { showToast } from './notifications'
 import type {
   AttendanceFormInput,
   AuthInput,
@@ -1204,13 +1206,13 @@ function renderWorkersTable(data: BootstrapData) {
       try {
         const result = await window.inventoryApi.resetUserPassword(workerId)
         if (result.success) {
-          alert(result.message || 'Contraseña restablecida')
+          showToast.success(result.message || 'Contraseña restablecida')
         } else {
-          alert(result.message || 'Error al restablecer contraseña')
+          showToast.error(result.message || 'Error al restablecer contraseña')
         }
       } catch (err) {
         console.error(err)
-        alert('Ocurrió un error inesperado')
+        showToast.error('Ocurrió un error inesperado')
       }
     })
   })
@@ -1379,7 +1381,7 @@ async function exportAuditLogs() {
   try {
     const result = await window.inventoryApi.fetchAuditLogs(input)
     if (result.logs.length === 0) {
-      alert('No hay datos para exportar.')
+      showToast.warning('No hay datos para exportar.')
       return
     }
     
@@ -1403,7 +1405,7 @@ async function exportAuditLogs() {
     URL.revokeObjectURL(url)
   } catch (err) {
     console.error('Error exportando CSV:', err)
-    alert('Error al exportar.')
+    showToast.error('Error al exportar.')
   }
 }
 
@@ -1976,10 +1978,19 @@ function resetWorkerForm() {
 
 function setStatus(targetId: string, message: string, kind: 'info' | 'success' | 'error' = 'info') {
   const target = document.querySelector<HTMLElement>(`#${targetId}`)
-  if (!target) return
-  target.textContent = message
-  target.dataset.kind = kind
+  if (target) {
+    target.textContent = message
+    target.dataset.kind = kind
+  }
 
+  // Trigger premium toast notifications
+  if (kind === 'success') {
+    showToast.success(message)
+  } else if (kind === 'error') {
+    showToast.error(message)
+  } else {
+    showToast.info(message)
+  }
 }
 
 function getFriendlyErrorMessage(error: unknown, fallback: string) {
@@ -2678,7 +2689,7 @@ async function openSaleDetailModal(saleId: number) {
     `
     modal.style.display = 'block'
   } catch (error) {
-    alert(error instanceof Error ? error.message : 'No se pudo obtener el detalle de la venta.')
+    showToast.error(error instanceof Error ? error.message : 'No se pudo obtener el detalle de la venta.')
   }
 }
 
@@ -2957,7 +2968,7 @@ async function loadSalesReportData() {
     renderDailyTrendChart('daily-chart-container', reportData.charts.daily)
 
   } catch (error) {
-    alert(error instanceof Error ? error.message : 'Error al generar el reporte.')
+    showToast.error(error instanceof Error ? error.message : 'Error al generar el reporte.')
   } finally {
     if (btn) {
       btn.disabled = false
