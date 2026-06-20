@@ -5,6 +5,7 @@ import type {
   AuthInput,
   AuthResult,
   BootstrapData,
+  ClientFormInput,
   InventoryAuditInput,
   MovementFormInput,
   ProductFormInput,
@@ -12,15 +13,18 @@ import type {
   RoleFormInput,
   SaleFormInput,
   SaleFullDetail,
+  ShiftFormInput,
   WorkerFormInput,
   SalesReportInput,
   SalesReportData,
 } from '@shared/ipc/contracts'
 
-type TabName = 'bienvenida' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion' | 'reportes'
+type TabName = 'home' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'administracion' | 'reportes'
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
+type ThemeName = 'light' | 'dark'
 
+const THEME_STORAGE_KEY = 'lubricantes-theme'
 
 type ProductFormState = { id_producto: number | null }
 const productFormState: ProductFormState = { id_producto: null }
@@ -39,6 +43,9 @@ const roleFormState: RoleFormState = { id_rol: null }
 
 type WorkerFormState = { id_trabajador: number | null }
 const workerFormState: WorkerFormState = { id_trabajador: null }
+
+type ShiftFormState = { id_turno: number | null }
+const shiftFormState: ShiftFormState = { id_turno: null }
 
 let bootstrapData: BootstrapData | null = null
 let currentUser: NonNullable<AuthResult['user']> | null = null
@@ -61,6 +68,42 @@ let inventorySearchTerm = ''
 let inventorySearchField: InventorySearchField = 'all'
 let inventoryAuditSearchTerm = ''
 let clockInterval: number | null = null
+let landingDismissTimer: number | null = null
+let bootstrapInitialized = false
+let saleSubmissionInProgress = false
+
+function applyTheme(theme: ThemeName) {
+  document.documentElement.dataset.theme = theme
+  const button = document.querySelector<HTMLButtonElement>('#theme-toggle')
+  if (!button) return
+
+  const dark = theme === 'dark'
+  button.setAttribute('aria-pressed', String(dark))
+  button.title = dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'
+  button.innerHTML = dark
+    ? '<i class="ti ti-sun"></i> <span>Modo claro</span>'
+    : '<i class="ti ti-moon"></i> <span>Modo oscuro</span>'
+}
+
+function initTheme() {
+  let theme: ThemeName = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+  try {
+    theme = localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'
+  } catch {
+    // La aplicación puede funcionar aunque el almacenamiento local no esté disponible.
+  }
+
+  applyTheme(theme)
+  document.querySelector<HTMLButtonElement>('#theme-toggle')?.addEventListener('click', () => {
+    const nextTheme: ThemeName = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+    applyTheme(nextTheme)
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextTheme)
+    } catch {
+      // En este caso la preferencia solo durará durante la ejecución actual.
+    }
+  })
+}
 
 function hasPermission(permissionName: string) {
   return Boolean(currentUser?.isAdminLike || currentUser?.permissionNames.includes(permissionName))
@@ -72,22 +115,21 @@ function hasAnyPermission(permissionNames: string[]) {
 
 function canAccessTab(tabName: TabName) {
   const accessByTab: Record<TabName, boolean> = {
-    bienvenida: true,
-    dashboard: true,
+    home: true,
+    dashboard: Boolean(currentUser?.isAdminLike),
     inventario: hasAnyPermission(['VER_INVENTARIO', 'GESTIONAR_INVENTARIO']),
     movimientos: hasAnyPermission(['VER_MOVIMIENTOS', 'REGISTRAR_MOVIMIENTOS']),
     ventas: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
     turnos: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
-    asistencias: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
-    administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES']),
-    reportes: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
+    administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES', 'GESTIONAR_TURNOS']),
+    reportes: Boolean(currentUser?.isAdminLike),
   }
 
   return accessByTab[tabName]
 }
 
 function getFirstAccessibleTab(): TabName {
-  return (['inventario', 'movimientos', 'ventas', 'turnos', 'asistencias', 'administracion', 'reportes'] as TabName[]).find(canAccessTab) ?? 'inventario'
+  return (['home', 'dashboard', 'inventario', 'movimientos', 'ventas', 'turnos', 'administracion', 'reportes'] as TabName[]).find(canAccessTab) ?? 'home'
 }
 
 
@@ -95,12 +137,20 @@ function setActiveTab(tabName: TabName) {
   const nextTab = canAccessTab(tabName) ? tabName : getFirstAccessibleTab()
 
   document.querySelectorAll<HTMLElement>('.tabs__button[data-tab]').forEach((button) => {
-    const isActive = button.dataset.tab === nextTab
+    const buttonTab = button.dataset.tab as TabName | undefined
+    const allowed = buttonTab ? canAccessTab(buttonTab) : false
+    const isActive = allowed && buttonTab === nextTab
+    button.hidden = !allowed
+    button.toggleAttribute('aria-hidden', !allowed)
     button.classList.toggle('is-active', isActive)
     button.setAttribute('aria-selected', String(isActive))
   })
   document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
-    panel.classList.toggle('is-active', panel.dataset.panel === nextTab)
+    const panelTab = panel.dataset.panel as TabName | undefined
+    const allowed = panelTab ? canAccessTab(panelTab) : false
+    panel.hidden = !allowed
+    panel.toggleAttribute('aria-hidden', !allowed)
+    panel.classList.toggle('is-active', allowed && panelTab === nextTab)
   })
 
   if (tabName === 'ventas') {
@@ -195,6 +245,7 @@ function updateClock() {
   const now = new Date()
   const clock = formatCurrentClock(now)
   const date = formatCurrentDate(now)
+  renderLanding()
 
   document.querySelectorAll<HTMLElement>('#landing-clock, #topbar-clock').forEach((element) => {
     element.textContent = clock
@@ -266,36 +317,319 @@ function formatCurrency(value: number) {
 function renderMetricCards(data: BootstrapData) {
   const metricsContainer = document.querySelector<HTMLDivElement>('#dashboard-metrics')
   const quickStats = document.querySelector<HTMLDivElement>('#quick-stats')
+  const salesTotal = Number(data.metrics.totalSalesAmount || 0)
   const cards = [
-    { label: 'Productos', value: data.metrics.totalProducts },
-    { label: 'Stock total', value: formatNumber(data.metrics.totalStock) },
-    { label: 'Movimientos', value: data.metrics.totalMovements },
-    { label: 'Ventas', value: data.metrics.totalSales },
-    { label: 'En turno', value: data.metrics.activeAttendances },
+    { icon: 'ti-box', label: 'Productos', value: data.metrics.totalProducts, detail: `${data.metrics.lowStockProducts} con stock bajo` },
+    { icon: 'ti-packages', label: 'Stock total', value: formatNumber(data.metrics.totalStock), detail: 'Unidades registradas' },
+    { icon: 'ti-arrows-exchange', label: 'Movimientos', value: data.metrics.totalMovements, detail: 'Movimientos recientes' },
+    { icon: 'ti-receipt', label: 'Ventas', value: data.metrics.totalSales, detail: `Bs ${formatCurrency(salesTotal)}` },
+    { icon: 'ti-users', label: 'En turno', value: data.metrics.activeAttendances, detail: 'Trabajadores activos' },
   ]
   const markup = cards.map(card => `
     <article class="summary-card">
-      <span>${escapeHtml(card.label)}</span>
+      <div class="summary-card__heading"><i class="ti ${card.icon}"></i><span>${escapeHtml(card.label)}</span></div>
       <strong>${escapeHtml(card.value)}</strong>
+      <small>${escapeHtml(card.detail)}</small>
     </article>
   `).join('')
   if (metricsContainer) metricsContainer.innerHTML = markup
   if (quickStats) quickStats.innerHTML = markup
 }
 
+function renderDashboard(data: BootstrapData) {
+  const lowStock = data.products
+    .filter((product) => Number(product.stock_actual) <= Number(product.stock_minimo))
+    .sort((a, b) => Number(a.stock_actual) - Number(b.stock_actual))
+    .slice(0, 6)
+  const activeWorkers = data.attendances.filter((attendance) => attendance.estado === 'EN_TURNO').slice(0, 6)
+  const recentSales = data.sales.slice(0, 5)
+  const recentMovements = data.movements.slice(0, 5)
+
+  const lowStockCount = document.querySelector<HTMLElement>('#dashboard-low-stock-count')
+  const activeCount = document.querySelector<HTMLElement>('#dashboard-active-count')
+  if (lowStockCount) lowStockCount.textContent = `${data.metrics.lowStockProducts} productos`
+  if (activeCount) activeCount.textContent = `${data.metrics.activeAttendances} activos`
+
+  const lowStockContainer = document.querySelector<HTMLElement>('#dashboard-low-stock')
+  if (lowStockContainer) {
+    lowStockContainer.innerHTML = lowStock.length
+      ? lowStock.map((product) => `
+          <article class="dashboard-list-item">
+            <i class="ti ti-alert-triangle"></i>
+            <div>
+              <strong>${escapeHtml(product.nombre)}</strong>
+              <small>${escapeHtml(product.codigo)} · Minimo ${escapeHtml(formatNumber(Number(product.stock_minimo)))}</small>
+            </div>
+            <span class="dashboard-list-value">${escapeHtml(formatNumber(Number(product.stock_actual)))}</span>
+          </article>
+        `).join('')
+      : '<p class="empty-state">Todo el inventario está por encima del stock mínimo.</p>'
+  }
+
+  const activeContainer = document.querySelector<HTMLElement>('#dashboard-active-workers')
+  if (activeContainer) {
+    activeContainer.innerHTML = activeWorkers.length
+      ? activeWorkers.map((attendance) => `
+          <article class="dashboard-list-item">
+            <i class="ti ti-user-check"></i>
+            <div>
+              <strong>${escapeHtml(attendance.trabajador_nombre)}</strong>
+              <small>${escapeHtml(attendance.turno_nombre)} · Entrada ${escapeHtml(formatTime(attendance.hora_entrada))}</small>
+            </div>
+            <span class="badge badge--success">En turno</span>
+          </article>
+        `).join('')
+      : '<p class="empty-state">No hay trabajadores con una entrada abierta.</p>'
+  }
+
+  const salesContainer = document.querySelector<HTMLElement>('#dashboard-recent-sales')
+  if (salesContainer) {
+    salesContainer.innerHTML = recentSales.length
+      ? recentSales.map((sale) => `
+          <article class="dashboard-list-item">
+            <i class="ti ti-receipt"></i>
+            <div>
+              <strong>${escapeHtml(sale.numero_factura)}</strong>
+              <small>${escapeHtml(formatDateTime(sale.fecha_venta))} · ${escapeHtml(sale.metodo_pago)}</small>
+            </div>
+            <span class="dashboard-list-value">Bs ${escapeHtml(formatCurrency(Number(sale.total)))}</span>
+          </article>
+        `).join('')
+      : '<p class="empty-state">Todavía no hay ventas registradas.</p>'
+  }
+
+  const movementsContainer = document.querySelector<HTMLElement>('#dashboard-recent-movements')
+  if (movementsContainer) {
+    movementsContainer.innerHTML = recentMovements.length
+      ? recentMovements.map((movement) => `
+          <article class="dashboard-list-item">
+            <i class="ti ${movement.tipo_movimiento === 'ENTRADA' ? 'ti-arrow-down' : 'ti-arrow-up'}"></i>
+            <div>
+              <strong>${escapeHtml(movement.producto_nombre)}</strong>
+              <small>${escapeHtml(movement.tipo_movimiento)} · ${escapeHtml(formatDateTime(movement.fecha_movimiento))}</small>
+            </div>
+            <span class="dashboard-list-value">${escapeHtml(formatNumber(Number(movement.cantidad)))}</span>
+          </article>
+        `).join('')
+      : '<p class="empty-state">Todavía no hay movimientos registrados.</p>'
+  }
+}
+
+function getGreetingForHour(hour: number, userName: string) {
+  if (hour >= 6 && hour < 12) {
+    return `¡Buenos días, ${userName}!`
+  }
+
+  if (hour >= 12 && hour < 19) {
+    return `¡Buenas tardes, ${userName}!`
+  }
+
+  return `¡Buenas noches, ${userName}!`
+}
+
 function renderLanding() {
   const welcome = document.querySelector<HTMLHeadingElement>('#landing-welcome')
   const message = document.querySelector<HTMLParagraphElement>('#landing-message')
   const userName = currentUser?.nombres || currentUser?.username || 'Usuario'
-  const roleName = currentUser?.roleNames.length ? currentUser.roleNames.join(', ') : 'sin rol asignado'
 
   if (welcome) {
-    welcome.textContent = `Bienvenido, ${userName}`
+    welcome.textContent = getGreetingForHour(new Date().getHours(), userName)
   }
 
   if (message) {
-    message.textContent = `Rol: ${roleName}. Revisa el estado del negocio y continua con tus tareas del dia.`
+    message.textContent = 'Que tengas una excelente jornada de trabajo.'
   }
+
+  const roleElement = document.querySelector<HTMLElement>('#home-role-name')
+  if (roleElement) {
+    roleElement.textContent = currentUser?.roleNames.length ? currentUser.roleNames.join(', ') : 'Sin rol asignado'
+  }
+}
+
+function renderHomeQuickActions() {
+  const container = document.querySelector<HTMLElement>('#home-quick-actions')
+  if (!container) return
+
+  const actions: Array<{ tab: TabName; icon: string; title: string; description: string; target?: string }> = []
+
+  if (currentUser?.isAdminLike) {
+    actions.push(
+      {
+        tab: 'dashboard',
+        icon: 'ti-layout-dashboard',
+        title: 'Ver Dashboard',
+        description: 'Consulta metricas, ventas y el estado general del negocio.',
+      },
+      {
+        tab: 'administracion',
+        icon: 'ti-clock-cog',
+        title: 'Gestionar Turnos',
+        description: 'Configura los horarios de trabajo de la temporada.',
+        target: '#shift-management-card',
+      },
+    )
+  } else {
+    if (hasPermission('REGISTRAR_VENTAS')) {
+      actions.push({
+        tab: 'ventas',
+        icon: 'ti-shopping-cart-plus',
+        title: 'Nueva Venta',
+        description: 'Abre la caja y registra una nueva venta.',
+      })
+    }
+
+    if (hasPermission('REGISTRAR_ASISTENCIAS')) {
+      actions.push({
+        tab: 'turnos',
+        icon: 'ti-clock-check',
+        title: 'Registrar Asistencia',
+        description: 'Marca tu entrada o salida del turno actual.',
+        target: '#attendance-form',
+      })
+    }
+  }
+
+  if (actions.length === 0) {
+    container.innerHTML = '<p class="empty-state">No tienes tareas rápidas asignadas para este rol.</p>'
+    return
+  }
+
+  container.innerHTML = actions.map((action) => `
+    <button class="quick-action-card" type="button" data-home-tab="${action.tab}" ${action.target ? `data-home-target="${action.target}"` : ''}>
+      <i class="ti ${action.icon}"></i>
+      <span>
+        <strong>${escapeHtml(action.title)}</strong>
+        <small>${escapeHtml(action.description)}</small>
+      </span>
+      <i class="ti ti-arrow-right quick-action-card__arrow"></i>
+    </button>
+  `).join('')
+
+  container.querySelectorAll<HTMLButtonElement>('[data-home-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      setActiveTab(button.dataset.homeTab as TabName)
+      const target = button.dataset.homeTarget
+      if (target) {
+        window.setTimeout(() => {
+          document.querySelector<HTMLElement>(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 120)
+      }
+    })
+  })
+}
+
+function weatherDescription(code: number, isDay: boolean) {
+  if (code === 0) return { label: 'Despejado', icon: isDay ? 'ti-sun' : 'ti-moon-stars' }
+  if (code === 1) return { label: 'Mayormente despejado', icon: isDay ? 'ti-sun-high' : 'ti-moon-stars' }
+  if (code === 2) return { label: 'Parcialmente nublado', icon: isDay ? 'ti-sun-high' : 'ti-moon' }
+  if (code === 3) return { label: 'Nublado', icon: 'ti-cloud' }
+  if (code === 45 || code === 48) return { label: 'Niebla', icon: 'ti-mist' }
+  if (code >= 51 && code <= 67) return { label: 'Lluvia ligera', icon: 'ti-cloud-rain' }
+  if (code >= 71 && code <= 77) return { label: 'Nieve', icon: 'ti-snowflake' }
+  if (code >= 80 && code <= 82) return { label: 'Chubascos', icon: 'ti-cloud-rain' }
+  if (code >= 95) return { label: 'Tormenta', icon: 'ti-cloud-storm' }
+  return { label: 'Clima variable', icon: 'ti-cloud' }
+}
+
+function setWeatherStatus(
+  temperature: string,
+  description: string,
+  details: string,
+  icon = 'ti-cloud',
+  location = 'Trinidad, Bolivia',
+  humidity = '--%',
+  wind = '-- km/h',
+  period: 'day' | 'night' | 'loading' = 'loading',
+) {
+  const temperatureElement = document.querySelector<HTMLElement>('#weather-temperature')
+  const descriptionElement = document.querySelector<HTMLElement>('#weather-description')
+  const detailsElement = document.querySelector<HTMLElement>('#weather-details')
+  const iconElement = document.querySelector<HTMLElement>('.weather-card__icon')
+  const locationElement = document.querySelector<HTMLElement>('#weather-location')
+  const humidityElement = document.querySelector<HTMLElement>('#weather-humidity')
+  const windElement = document.querySelector<HTMLElement>('#weather-wind')
+  const weatherCard = document.querySelector<HTMLElement>('.weather-card')
+
+  if (temperatureElement) temperatureElement.textContent = temperature
+  if (descriptionElement) descriptionElement.textContent = description
+  if (detailsElement) detailsElement.textContent = details
+  if (iconElement) iconElement.className = `ti ${icon} weather-card__icon`
+  if (locationElement) locationElement.textContent = location
+  if (humidityElement) humidityElement.textContent = humidity
+  if (windElement) windElement.textContent = wind
+  if (weatherCard) weatherCard.dataset.period = period
+}
+
+async function fetchWeather(latitude: number, longitude: number, locationLabel: string) {
+  const url = new URL('https://api.open-meteo.com/v1/forecast')
+  url.searchParams.set('latitude', String(latitude))
+  url.searchParams.set('longitude', String(longitude))
+  url.searchParams.set('current', 'temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day')
+  url.searchParams.set('timezone', 'America/La_Paz')
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error('No se pudo consultar el clima.')
+  }
+
+  const data = await response.json() as {
+    current?: {
+      temperature_2m: number
+      apparent_temperature: number
+      relative_humidity_2m: number
+      weather_code: number
+      wind_speed_10m: number
+      is_day: number
+    }
+  }
+
+  if (!data.current) {
+    throw new Error('El servicio no devolvio el clima actual.')
+  }
+
+  const isDay = data.current.is_day === 1
+  const condition = weatherDescription(data.current.weather_code, isDay)
+  setWeatherStatus(
+    `${Math.round(data.current.temperature_2m)} °C`,
+    condition.label,
+    `${isDay ? 'Día' : 'Noche'} · Sensacion termica ${Math.round(data.current.apparent_temperature)} °C`,
+    condition.icon,
+    locationLabel,
+    `${Math.round(data.current.relative_humidity_2m)}%`,
+    `${Math.round(data.current.wind_speed_10m)} km/h`,
+    isDay ? 'day' : 'night',
+  )
+}
+
+function loadLocalWeather() {
+  setWeatherStatus('--°', 'Cargando clima...', 'Consultando las condiciones de Trinidad.', 'ti-loader-2', 'Trinidad, Bolivia')
+  void fetchWeather(-14.8333, -64.9, 'Trinidad, Bolivia').catch(() => {
+    setWeatherStatus(
+      '--°',
+      'Clima no disponible',
+      'Revisa la conexion a internet e intenta nuevamente.',
+      'ti-cloud-off',
+      'Trinidad, Bolivia',
+    )
+  })
+}
+
+function showTemporaryLanding() {
+  const landing = document.querySelector<HTMLElement>('#session-welcome-banner')
+
+  if (!landing) {
+    return
+  }
+
+  if (landingDismissTimer) {
+    window.clearTimeout(landingDismissTimer)
+  }
+
+  landing.classList.remove('is-dismissed')
+  landingDismissTimer = window.setTimeout(() => {
+    landing.classList.add('is-dismissed')
+    landingDismissTimer = null
+  }, 4000)
 }
 
 function renderAppInfo(data: BootstrapData) {
@@ -335,19 +669,69 @@ function renderSelectOptions(select: HTMLSelectElement | null, options: Array<{ 
   select.innerHTML = items.join('')
 }
 
+function renderShiftSelectOptions(data: BootstrapData) {
+  const options = data.references.turnos.map((shift) => ({
+    id: shift.id_turno,
+    nombre: `${shift.nombre} (${shift.hora_inicio} - ${shift.hora_fin})`,
+  }))
+
+  const selects = [
+    document.querySelector<HTMLSelectElement>('#sale-form select[name="id_turno"]'),
+    document.querySelector<HTMLSelectElement>('#attendance-form select[name="id_turno"]'),
+  ]
+
+  selects.forEach((select) => {
+    if (!select) return
+    const currentValue = select.value
+    renderSelectOptions(select, options, true)
+    if (currentValue && options.some((option) => String(option.id) === currentValue)) {
+      select.value = currentValue
+    }
+  })
+}
+
+function updateShiftDataLocally(shift: BootstrapData['shifts'][number], remove = false) {
+  if (!bootstrapData) return
+
+  const previousShift = bootstrapData.shifts.find((item) => item.id_turno === shift.id_turno)
+  const nextShift = {
+    ...previousShift,
+    ...shift,
+    registros_asociados: shift.registros_asociados ?? previousShift?.registros_asociados ?? 0,
+  }
+
+  bootstrapData.shifts = remove
+    ? bootstrapData.shifts.filter((item) => item.id_turno !== shift.id_turno)
+    : [...bootstrapData.shifts.filter((item) => item.id_turno !== shift.id_turno), nextShift]
+        .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio) || a.nombre.localeCompare(b.nombre))
+
+  bootstrapData.references.turnos = bootstrapData.shifts
+    .filter((item) => Boolean(item.estado))
+    .map(({ id_turno, nombre, hora_inicio, hora_fin, descripcion }) => ({
+      id_turno,
+      nombre,
+      hora_inicio,
+      hora_fin,
+      descripcion,
+    }))
+
+  renderShiftsTable(bootstrapData)
+  renderShiftSelectOptions(bootstrapData)
+  renderAttendanceState(bootstrapData)
+}
+
 function setClosestCardHidden(selector: string, hidden: boolean) {
   document.querySelector<HTMLElement>(selector)?.closest<HTMLElement>('.module-card')?.toggleAttribute('hidden', hidden)
 }
 
 function applyAccessControl() {
   const accessByTab: Record<TabName, boolean> = {
-    bienvenida: true,
-    dashboard: true,
+    home: true,
+    dashboard: canAccessTab('dashboard'),
     inventario: canAccessTab('inventario'),
     movimientos: canAccessTab('movimientos'),
     ventas: canAccessTab('ventas'),
     turnos: canAccessTab('turnos'),
-    asistencias: canAccessTab('turnos'),
     administracion: canAccessTab('administracion'),
     reportes: canAccessTab('reportes'),
   }
@@ -356,6 +740,7 @@ function applyAccessControl() {
     const tabName = button.dataset.tab as TabName | undefined
     const allowed = tabName ? accessByTab[tabName] : false
     button.hidden = !allowed
+    button.toggleAttribute('aria-hidden', !allowed)
     button.disabled = !allowed
   })
 
@@ -363,6 +748,7 @@ function applyAccessControl() {
     const tabName = panel.dataset.panel as TabName | undefined
     const allowed = tabName ? accessByTab[tabName] : false
     panel.hidden = !allowed
+    panel.toggleAttribute('aria-hidden', !allowed)
     if (!allowed) {
       panel.classList.remove('is-active')
     }
@@ -384,6 +770,7 @@ function applyAccessControl() {
   setClosestCardHidden('#shift-history-table', !canAccessTab('turnos'))
   setClosestCardHidden('#role-form', !hasPermission('GESTIONAR_ROLES'))
   setClosestCardHidden('#worker-form', !hasPermission('GESTIONAR_TRABAJADORES'))
+  document.querySelector<HTMLElement>('#shift-management-card')?.toggleAttribute('hidden', !hasPermission('GESTIONAR_TURNOS'))
   setClosestCardHidden('#audit-table', !Boolean(currentUser?.isAdminLike))
 
   const activeTab = document.querySelector<HTMLElement>('[data-tab].is-active')?.dataset.tab as TabName | undefined
@@ -416,8 +803,10 @@ const productOptions = data.products.map((product) => ({
     )
   }
   if (saleForm) {
+    const clientSelect = saleForm.elements.namedItem('id_cliente') as HTMLSelectElement
+    const selectedClientId = clientSelect?.value || '0'
     renderSelectOptions(
-      saleForm.elements.namedItem('id_cliente') as HTMLSelectElement,
+      clientSelect,
       [
         { id: 0, nombre: 'Consumidor final' },
         ...data.references.clientes
@@ -431,14 +820,6 @@ const productOptions = data.products.map((product) => ({
     }))
 
     renderSelectOptions(saleForm.elements.namedItem('id_vendedor') as HTMLSelectElement, trabajadoresMapped, false)
-    renderSelectOptions(
-      saleForm.elements.namedItem('id_turno') as HTMLSelectElement,
-      data.references.turnos.map((shift) => ({
-        id: shift.id_turno,
-        nombre: `${shift.nombre} (${shift.hora_inicio} - ${shift.hora_fin})`,
-      })),
-      true,
-    )
     renderSelectOptions(saleForm.elements.namedItem('id_moneda') as HTMLSelectElement, data.references.monedas, false)
 
     const methodSelect = document.querySelector<HTMLSelectElement>('#payment-method-select')
@@ -452,9 +833,10 @@ const productOptions = data.products.map((product) => ({
     }
 
     // Set default values for sale fields
-    const clienteSelect = saleForm.elements.namedItem('id_cliente') as HTMLSelectElement
-    if (clienteSelect) {
-      clienteSelect.value = '0'
+    if (clientSelect) {
+      clientSelect.value = Array.from(clientSelect.options).some((option) => option.value === selectedClientId)
+        ? selectedClientId
+        : '0'
     }
     const vendedorSelect = saleForm.elements.namedItem('id_vendedor') as HTMLSelectElement
     if (vendedorSelect) {
@@ -485,15 +867,9 @@ const productOptions = data.products.map((product) => ({
     } else {
       workerSelect.disabled = false
     }
-    renderSelectOptions(
-      attendanceForm.elements.namedItem('id_turno') as HTMLSelectElement,
-      data.references.turnos.map((shift) => ({
-        id: shift.id_turno,
-        nombre: `${shift.nombre} (${shift.hora_inicio} - ${shift.hora_fin})`,
-      })),
-      true,
-    )
   }
+
+  renderShiftSelectOptions(data)
 }
 
 
@@ -632,7 +1008,7 @@ function renderSalesTable(data: BootstrapData) {
   }
 
   if (data.sales.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="8" class="empty-state">Todavía no hay ventas registradas.</td></tr>'
+    tableBody.innerHTML = '<tr><td colspan="9" class="empty-state">Todavía no hay ventas registradas.</td></tr>'
     return
   }
 
@@ -642,7 +1018,7 @@ function renderSalesTable(data: BootstrapData) {
         <tr>
           <td><strong>${escapeHtml(sale.numero_factura)}</strong></td>
           <td>${escapeHtml(formatDateTime(sale.fecha_venta))}</td>
-
+          <td>${escapeHtml(sale.cliente_nombre)}</td>
           <td>${escapeHtml(sale.productos_diferentes)}</td>
           <td>${escapeHtml(formatCurrency(Number(sale.cantidad_total)))}</td>
           <td>${escapeHtml(formatCurrency(Number(sale.total)))}</td>
@@ -1176,6 +1552,71 @@ function renderWorkersTable(data: BootstrapData) {
   })
 }
 
+function renderShiftsTable(data: BootstrapData) {
+  const tableBody = document.querySelector<HTMLTableSectionElement>('#shifts-table tbody')
+  if (!tableBody) return
+
+  if (data.shifts.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay turnos configurados.</td></tr>'
+    return
+  }
+
+  tableBody.innerHTML = data.shifts.map((shift) => `
+    <tr>
+      <td>
+        <strong>${escapeHtml(shift.nombre)}</strong>
+        <small>${shift.registros_asociados ? `${escapeHtml(shift.registros_asociados)} registros asociados` : 'Sin historial'}</small>
+      </td>
+      <td>${escapeHtml(shift.hora_inicio)} - ${escapeHtml(shift.hora_fin)}</td>
+      <td>${escapeHtml(shift.descripcion ?? 'Sin descripcion')}</td>
+      <td><span class="badge ${shift.estado ? 'badge--success' : 'badge--muted'}">${shift.estado ? 'Disponible' : 'Inactivo'}</span></td>
+      <td>
+        <div class="row-actions">
+          <button class="button button--small" type="button" data-shift-edit="${shift.id_turno}">Editar</button>
+          <button class="button button--small button--ghost" type="button" data-shift-toggle="${shift.id_turno}">${shift.estado ? 'Deshabilitar' : 'Habilitar'}</button>
+        </div>
+      </td>
+    </tr>
+  `).join('')
+
+  tableBody.querySelectorAll<HTMLButtonElement>('[data-shift-edit]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const shift = data.shifts.find((item) => item.id_turno === Number(button.dataset.shiftEdit))
+      if (shift) {
+        fillShiftForm(shift)
+        setStatus('shift-status', `Editando ${shift.nombre}. Modifica los datos y pulsa "Actualizar turno".`, 'info')
+        const card = document.querySelector<HTMLElement>('#shift-management-card')
+        card?.classList.add('is-editing')
+        card?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        window.setTimeout(() => {
+          document.querySelector<HTMLInputElement>('#shift-form input[name="nombre"]')?.focus()
+        }, 350)
+      }
+    })
+  })
+
+  tableBody.querySelectorAll<HTMLButtonElement>('[data-shift-toggle]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const shift = data.shifts.find((item) => item.id_turno === Number(button.dataset.shiftToggle))
+      if (!shift) return
+
+      const nextState = !Boolean(shift.estado)
+      button.disabled = true
+      button.textContent = nextState ? 'Habilitando...' : 'Deshabilitando...'
+
+      try {
+        await window.inventoryApi.setShiftState(shift.id_turno, nextState)
+        updateShiftDataLocally({ ...shift, estado: nextState })
+        await refresh()
+        setStatus('shift-status', `Turno ${nextState ? 'habilitado' : 'deshabilitado'} correctamente.`, 'success')
+      } catch (error) {
+        setStatus('shift-status', getFriendlyErrorMessage(error, 'No se pudo cambiar el estado del turno.'), 'error')
+      }
+    })
+  })
+
+}
+
 function renderAuditTable(data: BootstrapData) {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#audit-table tbody')
   if (!tableBody) return
@@ -1358,11 +1799,16 @@ function updateSaleShift() {
   if (!saleForm) return
   const vendedorSelect = saleForm.elements.namedItem('id_vendedor') as HTMLSelectElement
   const shiftSelect = saleForm.elements.namedItem('id_turno') as HTMLSelectElement
+  const shiftStatus = document.querySelector<HTMLElement>('#sale-shift-status')
   if (!vendedorSelect || !shiftSelect) return
 
   const workerId = Number(vendedorSelect.value)
   if (!workerId) {
     shiftSelect.value = ''
+    if (shiftStatus) {
+      shiftStatus.textContent = 'Selecciona un vendedor para detectar su jornada activa.'
+      shiftStatus.dataset.state = 'pending'
+    }
     return
   }
 
@@ -1372,8 +1818,18 @@ function updateSaleShift() {
 
   if (activeAttendance) {
     shiftSelect.value = String(activeAttendance.id_turno)
+    if (shiftStatus) {
+      shiftStatus.textContent = `Turno detectado automáticamente: ${activeAttendance.turno_nombre}.`
+      shiftStatus.dataset.state = 'success'
+    }
   } else {
     shiftSelect.value = ''
+    if (shiftStatus) {
+      shiftStatus.textContent = currentUser?.isAdminLike
+        ? 'Administrador sin turno activo: la venta se registrará sin turno.'
+        : 'El vendedor debe registrar su entrada antes de realizar ventas.'
+      shiftStatus.dataset.state = currentUser?.isAdminLike ? 'pending' : 'error'
+    }
   }
 }
 
@@ -1751,6 +2207,34 @@ function resetWorkerForm() {
   if (btn) btn.textContent = 'Guardar trabajador'
 }
 
+function fillShiftForm(shift: BootstrapData['shifts'][number]) {
+  const form = document.querySelector<HTMLFormElement>('#shift-form')
+  if (!form) return
+
+  shiftFormState.id_turno = shift.id_turno
+  ;(form.elements.namedItem('id_turno') as HTMLInputElement).value = String(shift.id_turno)
+  ;(form.elements.namedItem('nombre') as HTMLInputElement).value = shift.nombre
+  ;(form.elements.namedItem('hora_inicio') as HTMLInputElement).value = shift.hora_inicio.slice(0, 5)
+  ;(form.elements.namedItem('hora_fin') as HTMLInputElement).value = shift.hora_fin.slice(0, 5)
+  ;(form.elements.namedItem('descripcion') as HTMLTextAreaElement).value = shift.descripcion ?? ''
+  ;(form.elements.namedItem('estado') as HTMLInputElement).checked = Boolean(shift.estado)
+  const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')
+  if (button) button.textContent = 'Actualizar turno'
+}
+
+function resetShiftForm() {
+  const form = document.querySelector<HTMLFormElement>('#shift-form')
+  if (!form) return
+
+  shiftFormState.id_turno = null
+  document.querySelector<HTMLElement>('#shift-management-card')?.classList.remove('is-editing')
+  form.reset()
+  ;(form.elements.namedItem('id_turno') as HTMLInputElement).value = ''
+  ;(form.elements.namedItem('estado') as HTMLInputElement).checked = true
+  const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')
+  if (button) button.textContent = 'Guardar turno'
+}
+
 function setStatus(targetId: string, message: string, kind: 'info' | 'success' | 'error' = 'info') {
   const target = document.querySelector<HTMLElement>(`#${targetId}`)
   if (!target) return
@@ -1822,7 +2306,9 @@ function readRequiredId(formData: FormData, name: string, label: string) {
 async function refresh() {
   bootstrapData = await window.inventoryApi.getBootstrapData()
   renderLanding()
+  renderHomeQuickActions()
   renderMetricCards(bootstrapData)
+  renderDashboard(bootstrapData)
   renderAppInfo(bootstrapData)
   applyAccessControl()
   renderProductFormOptions(bootstrapData)
@@ -1838,6 +2324,7 @@ async function refresh() {
   renderShiftHistoryTable(bootstrapData)
   renderRolesTable(bootstrapData)
   renderWorkersTable(bootstrapData)
+  renderShiftsTable(bootstrapData)
   renderAuditTable(bootstrapData)
   if (!inventoryAuditMode) {
     resetInventoryAuditRows(bootstrapData)
@@ -1852,18 +2339,241 @@ async function refresh() {
 async function bootstrap() {
   appInfoSnapshot = await window.inventoryApi.getAppInfo()
   startClock()
+  loadLocalWeather()
 
   await refresh()
+  document.querySelector<HTMLButtonElement>('#weather-refresh')!.onclick = loadLocalWeather
+
+  if (bootstrapInitialized) {
+    return
+  }
+  bootstrapInitialized = true
 
   const productForm = document.querySelector<HTMLFormElement>('#product-form')
   const movementForm = document.querySelector<HTMLFormElement>('#movement-form')
   const saleForm = document.querySelector<HTMLFormElement>('#sale-form')
+  const clientForm = document.querySelector<HTMLFormElement>('#client-form')
   const attendanceForm = document.querySelector<HTMLFormElement>('#attendance-form')
   let attendanceAction: 'entry' | 'exit' = 'entry'
   const roleForm = document.querySelector<HTMLFormElement>('#role-form')
   const workerForm = document.querySelector<HTMLFormElement>('#worker-form')
+  const shiftForm = document.querySelector<HTMLFormElement>('#shift-form')
   const saleSearchInput = document.querySelector<HTMLInputElement>('#sale-product-search')
   const saleDiscountInput = document.querySelector<HTMLInputElement>('#sale-form input[name="descuento_total"]')
+  const clientSearchInput = document.querySelector<HTMLInputElement>('#client-search')
+  const clientSearchButton = document.querySelector<HTMLButtonElement>('#client-search-btn')
+  const clientSearchStatus = document.querySelector<HTMLElement>('#client-search-status')
+  const clientSelect = saleForm?.elements.namedItem('id_cliente') as HTMLSelectElement | null
+  const clientEditButton = document.querySelector<HTMLButtonElement>('#client-edit-btn')
+  let editingClientId: number | null = null
+
+  const updateClientEditButton = () => {
+    if (clientEditButton) clientEditButton.disabled = Number(clientSelect?.value ?? 0) <= 0
+  }
+
+  const setClientSearchStatus = (message: string, kind: 'info' | 'success' | 'error' = 'info') => {
+    if (!clientSearchStatus) return
+    clientSearchStatus.textContent = message
+    clientSearchStatus.dataset.kind = kind
+  }
+
+  const renderClientSearchResults = (query = '') => {
+    if (!clientSelect || !bootstrapData) return
+
+    const selectedValue = clientSelect.value
+    const normalizedQuery = query.trim().toLocaleLowerCase('es')
+    const filteredClients = bootstrapData.clients.filter((client) =>
+      !normalizedQuery
+      || client.documento.toLocaleLowerCase('es').includes(normalizedQuery)
+      || client.nombre.toLocaleLowerCase('es').includes(normalizedQuery)
+    )
+
+    renderSelectOptions(
+      clientSelect,
+      [
+        { id: 0, nombre: 'Consumidor final' },
+        ...filteredClients.map((client) => ({
+          id: client.id_cliente,
+          nombre: `${client.nombre} · CI ${client.documento}`,
+        })),
+      ],
+      false,
+    )
+
+    if (Array.from(clientSelect.options).some((option) => option.value === selectedValue)) {
+      clientSelect.value = selectedValue
+    } else {
+      clientSelect.value = filteredClients.length === 1 ? String(filteredClients[0].id_cliente) : '0'
+    }
+    updateClientEditButton()
+  }
+
+  const searchClient = () => {
+    if (!clientSearchInput || !clientSelect || !bootstrapData) return
+
+    const query = clientSearchInput.value.trim()
+    if (!query) {
+      renderClientSearchResults()
+      clientSelect.value = '0'
+      updateClientEditButton()
+      setClientSearchStatus('Escribe un CI o nombre para buscar.', 'error')
+      return
+    }
+
+    const normalizedQuery = query.toLocaleLowerCase('es')
+    const exactClient = bootstrapData.clients.find(
+      (client) => client.documento.toLocaleLowerCase('es') === normalizedQuery,
+    )
+    const matches = exactClient
+      ? [exactClient]
+      : bootstrapData.clients.filter((client) =>
+          client.documento.toLocaleLowerCase('es').includes(normalizedQuery)
+          || client.nombre.toLocaleLowerCase('es').includes(normalizedQuery)
+        )
+
+    renderClientSearchResults(query)
+
+    if (matches.length === 0) {
+      clientSelect.value = '0'
+      updateClientEditButton()
+      setClientSearchStatus('No se encontró ningún cliente. Puedes registrarlo con “Nuevo cliente”.', 'error')
+      return
+    }
+
+    clientSelect.value = String(matches[0].id_cliente)
+    updateClientEditButton()
+    setClientSearchStatus(
+      matches.length === 1
+        ? `Cliente encontrado: ${matches[0].nombre} · CI ${matches[0].documento}`
+        : `${matches.length} clientes encontrados. Selecciona el correcto en la lista.`,
+      'success',
+    )
+  }
+
+  const setClientFormVisible = (visible: boolean) => {
+    if (!clientForm) return
+
+    clientForm.hidden = !visible
+    document.querySelector<HTMLButtonElement>('#client-form-toggle')?.setAttribute('aria-expanded', String(visible))
+
+    if (visible) {
+      window.setTimeout(() => {
+        const nameInput = clientForm.elements.namedItem('nombre')
+        if (nameInput instanceof HTMLElement) nameInput.focus()
+      }, 0)
+      return
+    }
+
+    clientForm.reset()
+    editingClientId = null
+    const title = document.querySelector<HTMLElement>('#client-form-title')
+    if (title) title.textContent = 'Registrar cliente'
+    const submitButton = clientForm.querySelector<HTMLButtonElement>('button[type="submit"]')
+    if (submitButton) submitButton.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar cliente'
+    setStatus('client-status', '', 'info')
+  }
+
+  document.querySelector<HTMLButtonElement>('#client-form-toggle')?.addEventListener('click', () => {
+    clientForm?.reset()
+    editingClientId = null
+    const title = document.querySelector<HTMLElement>('#client-form-title')
+    if (title) title.textContent = 'Registrar cliente'
+    const submitButton = clientForm?.querySelector<HTMLButtonElement>('button[type="submit"]')
+    if (submitButton) submitButton.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar cliente'
+    setClientFormVisible(true)
+  })
+  document.querySelector<HTMLButtonElement>('#client-form-close')?.addEventListener('click', () => setClientFormVisible(false))
+  document.querySelector<HTMLButtonElement>('#client-form-cancel')?.addEventListener('click', () => setClientFormVisible(false))
+
+  clientSearchInput?.addEventListener('input', () => {
+    if (!clientSearchInput.value.trim()) {
+      renderClientSearchResults()
+      setClientSearchStatus('Escribe el CI o nombre y presiona Enter o la lupa.')
+    }
+  })
+  clientSearchInput?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    event.stopPropagation()
+    searchClient()
+  })
+  clientSearchButton?.addEventListener('click', searchClient)
+  clientSelect?.addEventListener('change', updateClientEditButton)
+  updateClientEditButton()
+
+  clientEditButton?.addEventListener('click', () => {
+    if (!clientForm || !bootstrapData) return
+
+    const clientId = Number(clientSelect?.value ?? 0)
+    const client = bootstrapData.clients.find((item) => item.id_cliente === clientId)
+    if (!client) {
+      setStatus('sale-status', 'Selecciona un cliente para editar sus datos.', 'error')
+      return
+    }
+
+    editingClientId = client.id_cliente
+    ;(clientForm.elements.namedItem('id_cliente') as HTMLInputElement).value = String(client.id_cliente)
+    ;(clientForm.elements.namedItem('nombre') as HTMLInputElement).value = client.nombre
+    ;(clientForm.elements.namedItem('documento') as HTMLInputElement).value = client.documento
+    ;(clientForm.elements.namedItem('telefono') as HTMLInputElement).value = client.telefono ?? ''
+    ;(clientForm.elements.namedItem('email') as HTMLInputElement).value = client.email ?? ''
+    ;(clientForm.elements.namedItem('direccion') as HTMLInputElement).value = client.direccion ?? ''
+    const title = document.querySelector<HTMLElement>('#client-form-title')
+    if (title) title.textContent = 'Editar cliente'
+    const submitButton = clientForm.querySelector<HTMLButtonElement>('button[type="submit"]')
+    if (submitButton) submitButton.innerHTML = '<i class="ti ti-device-floppy"></i> Actualizar cliente'
+    setClientFormVisible(true)
+    setStatus('client-status', `Editando los datos de ${client.nombre}.`, 'info')
+  })
+
+  clientForm?.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    if (!hasPermission('REGISTRAR_VENTAS')) {
+      setStatus('client-status', 'No tienes permiso para registrar clientes.', 'error')
+      return
+    }
+
+    const formData = new FormData(clientForm)
+    const wasEditing = editingClientId !== null
+    const payload: ClientFormInput = {
+      id_cliente: editingClientId,
+      nombre: String(formData.get('nombre') ?? '').trim(),
+      documento: String(formData.get('documento') ?? '').trim(),
+      telefono: String(formData.get('telefono') ?? '').trim() || null,
+      email: String(formData.get('email') ?? '').trim() || null,
+      direccion: String(formData.get('direccion') ?? '').trim() || null,
+    }
+    const button = clientForm.querySelector<HTMLButtonElement>('button[type="submit"]')
+    if (button) {
+      button.disabled = true
+      button.innerHTML = '<i class="ti ti-loader-2"></i> Guardando...'
+    }
+
+    try {
+      const result = await window.inventoryApi.saveClient(payload)
+      await refresh()
+      const clientSelect = saleForm?.elements.namedItem('id_cliente') as HTMLSelectElement | null
+      if (clientSelect) clientSelect.value = String(result.clientId)
+      setClientFormVisible(false)
+      if (clientSearchInput) clientSearchInput.value = payload.documento
+      updateClientEditButton()
+      setClientSearchStatus(`Cliente seleccionado: ${payload.nombre} · CI ${payload.documento}`, 'success')
+      setStatus(
+        'sale-status',
+        `Cliente ${payload.nombre} ${wasEditing ? 'actualizado' : 'registrado'} y seleccionado.`,
+        'success',
+      )
+    } catch (error) {
+      setStatus('client-status', getFriendlyErrorMessage(error, 'No se pudo registrar el cliente.'), 'error')
+    } finally {
+      if (button) {
+        button.disabled = false
+        button.innerHTML = editingClientId
+          ? '<i class="ti ti-device-floppy"></i> Actualizar cliente'
+          : '<i class="ti ti-device-floppy"></i> Guardar cliente'
+      }
+    }
+  })
 
   document.querySelector<HTMLButtonElement>('#product-form-reset')?.addEventListener('click', () => {
     resetProductForm()
@@ -2038,6 +2748,11 @@ async function bootstrap() {
 
   saleForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (saleSubmissionInProgress) {
+      setStatus('sale-status', 'La venta ya se está procesando. Espera un momento.', 'info')
+      return
+    }
+
     if (!hasPermission('REGISTRAR_VENTAS')) {
       setStatus('sale-status', 'No tienes permiso para registrar ventas.', 'error')
       return
@@ -2075,6 +2790,11 @@ async function bootstrap() {
 
     const idTurnoVal = formData.get('id_turno') ? Number(formData.get('id_turno')) : 0
     const idTurno = idTurnoVal > 0 ? idTurnoVal : null
+
+    if (!idTurno && !currentUser?.isAdminLike) {
+      setStatus('sale-status', 'El vendedor debe registrar su entrada antes de confirmar la venta.', 'error')
+      return
+    }
 
     const idMoneda = Number(formData.get('id_moneda') ?? 1)
     const tasaCambio = Number(formData.get('tasa_cambio_aplicada') ?? 1)
@@ -2115,6 +2835,7 @@ async function bootstrap() {
       submitBtn.textContent = 'Procesando...'
     }
 
+    saleSubmissionInProgress = true
     try {
       await window.inventoryApi.createSale(payload)
       setStatus('sale-status', 'Venta registrada correctamente.', 'success')
@@ -2126,6 +2847,7 @@ async function bootstrap() {
     } catch (error) {
       setStatus('sale-status', getFriendlyErrorMessage(error, 'No se pudo registrar la venta.'), 'error')
     } finally {
+      saleSubmissionInProgress = false
       if (submitBtn) {
         submitBtn.disabled = false
         submitBtn.textContent = 'Confirmar venta'
@@ -2255,6 +2977,74 @@ async function bootstrap() {
     }
   })
 
+  document.querySelector<HTMLButtonElement>('#dashboard-refresh')?.addEventListener('click', async () => {
+    const button = document.querySelector<HTMLButtonElement>('#dashboard-refresh')
+    if (button) {
+      button.disabled = true
+      button.innerHTML = '<i class="ti ti-loader-2"></i> Actualizando...'
+    }
+
+    try {
+      await refresh()
+    } finally {
+      if (button) {
+        button.disabled = false
+        button.innerHTML = '<i class="ti ti-refresh"></i> Actualizar'
+      }
+    }
+  })
+
+  document.querySelector<HTMLButtonElement>('#shift-form-reset')?.addEventListener('click', () => {
+    resetShiftForm()
+    setStatus('shift-status', 'Formulario listo para un nuevo turno.', 'info')
+  })
+
+  shiftForm?.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    if (!hasPermission('GESTIONAR_TURNOS')) {
+      setStatus('shift-status', 'No tienes permiso para gestionar turnos.', 'error')
+      return
+    }
+
+    const formData = new FormData(shiftForm)
+    const payload: ShiftFormInput = {
+      id_turno: shiftFormState.id_turno,
+      nombre: String(formData.get('nombre') ?? '').trim(),
+      hora_inicio: String(formData.get('hora_inicio') ?? ''),
+      hora_fin: String(formData.get('hora_fin') ?? ''),
+      descripcion: String(formData.get('descripcion') ?? '').trim() || null,
+      estado: formData.get('estado') !== null,
+    }
+
+    const submitButton = shiftForm.querySelector<HTMLButtonElement>('button[type="submit"]')
+    if (submitButton) {
+      submitButton.disabled = true
+      submitButton.textContent = 'Guardando...'
+    }
+
+    try {
+      const result = await window.inventoryApi.saveShift(payload)
+      updateShiftDataLocally({
+        id_turno: result.shiftId,
+        nombre: payload.nombre,
+        hora_inicio: payload.hora_inicio,
+        hora_fin: payload.hora_fin,
+        descripcion: payload.descripcion ?? null,
+        estado: payload.estado,
+      })
+      resetShiftForm()
+      await refresh()
+      setStatus('shift-status', 'Turno guardado correctamente.', 'success')
+    } catch (error) {
+      setStatus('shift-status', getFriendlyErrorMessage(error, 'No se pudo guardar el turno.'), 'error')
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false
+        submitButton.textContent = shiftFormState.id_turno ? 'Actualizar turno' : 'Guardar turno'
+      }
+    }
+  })
+
   document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
     button.addEventListener('click', () => {
       const tabName = button.dataset.tab as TabName | undefined
@@ -2345,6 +3135,8 @@ async function openSaleDetailModal(saleId: number) {
           <div class="field"><span>Factura</span><strong>${escapeHtml(detail.numero_factura)}</strong></div>
           <div class="field"><span>Fecha</span><strong>${escapeHtml(formatDateTime(detail.fecha_venta))}</strong></div>
           <div class="field"><span>Cliente</span><strong>${escapeHtml(detail.cliente_nombre || 'Consumidor final')}</strong></div>
+          <div class="field"><span>CI</span><strong>${escapeHtml(detail.cliente_documento || '-')}</strong></div>
+          <div class="field"><span>Teléfono</span><strong>${escapeHtml(detail.cliente_telefono || '-')}</strong></div>
           <div class="field"><span>Vendedor</span><strong>${escapeHtml(detail.vendedor_nombre)}</strong></div>
           <div class="field"><span>Turno</span><strong>${escapeHtml(detail.turno_nombre || 'Sin turno')}</strong></div>
           <div class="field"><span>Estado</span><strong class="badge badge--soft">${escapeHtml(detail.estado)}</strong></div>
@@ -2449,7 +3241,7 @@ function initLogin() {
         currentUser = result.user ?? null
         document.getElementById('login-overlay')!.style.display = 'none'
         document.getElementById('main-app')!.style.display = 'block'
-        setActiveTab('bienvenida')
+        setActiveTab('home')
         void bootstrap()
       } else {
         setStatus('login-status', result.message ?? 'Credenciales incorrectas', 'error')
@@ -2465,6 +3257,11 @@ function initLogin() {
       window.clearInterval(clockInterval)
       clockInterval = null
     }
+    if (landingDismissTimer) {
+      window.clearTimeout(landingDismissTimer)
+      landingDismissTimer = null
+    }
+    document.querySelector<HTMLElement>('#session-welcome-banner')?.classList.remove('is-dismissed')
     const loginForm = document.getElementById('login-form') as HTMLFormElement | null
     loginForm?.reset()
     document.getElementById('main-app')!.style.display = 'none'
@@ -2472,8 +3269,6 @@ function initLogin() {
     sidebar?.classList.remove('is-collapsed')
   })
 }
-
-void initLogin()
 
 function initReportDates() {
   const startDateInput = document.querySelector<HTMLInputElement>('#report-start-date')
@@ -2855,4 +3650,5 @@ function renderDailyTrendChart(containerId: string, data: { fecha: string; total
   })
 }
 
+initTheme()
 void initLogin()

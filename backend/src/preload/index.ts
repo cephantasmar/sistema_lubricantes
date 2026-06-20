@@ -3,6 +3,7 @@ import type {
   AppInfo,
   AttendanceFormInput,
   BootstrapData,
+  ClientFormInput,
   InventoryAuditInput,
   InventoryAuditResult,
   MovementFormInput,
@@ -12,6 +13,7 @@ import type {
   AuthInput,
   AuthResult,
   RoleFormInput,
+  ShiftFormInput,
   WorkerFormInput,
   AttendanceInput,
   SalesReportInput,
@@ -28,6 +30,7 @@ contextBridge.exposeInMainWorld('inventoryApi', {
   closeInventory: (payload: InventoryAuditInput) =>
     ipcRenderer.invoke('inventory:close-inventory', payload) as Promise<InventoryAuditResult>,
   createSale: (payload: SaleFormInput) => ipcRenderer.invoke('sales:create-sale', payload) as Promise<{ saleId: number }>,
+  saveClient: (payload: ClientFormInput) => ipcRenderer.invoke('sales:save-client', payload) as Promise<{ clientId: number }>,
   getSaleDetail: (saleId: number) => ipcRenderer.invoke('sales:get-sale-detail', saleId) as Promise<SaleFullDetail>,
   getSalesReport: (payload: SalesReportInput) => ipcRenderer.invoke('sales:get-sales-report', payload) as Promise<SalesReportData>,
   registerAttendanceEntry: (payload: AttendanceFormInput) =>
@@ -39,5 +42,9 @@ contextBridge.exposeInMainWorld('inventoryApi', {
   login: (payload: AuthInput) => ipcRenderer.invoke('auth:login', payload) as Promise<AuthResult>,
   saveRole: (payload: RoleFormInput) => ipcRenderer.invoke('admin:save-role', payload) as Promise<{ roleId: number }>,
   saveWorker: (payload: WorkerFormInput) => ipcRenderer.invoke('admin:save-worker', payload) as Promise<{ workerId: number }>,
+  saveShift: (payload: ShiftFormInput) => ipcRenderer.invoke('admin:save-shift', payload) as Promise<{ shiftId: number }>,
+  deleteShift: (shiftId: number) => ipcRenderer.invoke('admin:delete-shift', shiftId) as Promise<{ deleted: boolean }>,
+  setShiftState: (shiftId: number, enabled: boolean) =>
+    ipcRenderer.invoke('admin:set-shift-state', shiftId, enabled) as Promise<{ shiftId: number; enabled: boolean }>,
   recordAttendance: (payload: AttendanceInput) => ipcRenderer.invoke('shifts:record-attendance', payload) as Promise<{ attendanceId: number }>,
 })
