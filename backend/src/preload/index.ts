@@ -8,6 +8,8 @@ import type {
   InventoryAuditResult,
   MovementFormInput,
   ProductFormInput,
+  PdfPreviewInput,
+  PdfPreviewResult,
   SaleFormInput,
   SaleFullDetail,
   AuthInput,
@@ -27,6 +29,7 @@ contextBridge.exposeInMainWorld('inventoryApi', {
   getBootstrapData: () => ipcRenderer.invoke('app:get-bootstrap-data') as Promise<BootstrapData>,
   
   // Inventory & Sales
+  previewPdf: (payload: PdfPreviewInput) => ipcRenderer.invoke('system:preview-pdf', payload) as Promise<PdfPreviewResult>,
   saveProduct: (payload: ProductFormInput) => ipcRenderer.invoke('inventory:save-product', payload) as Promise<{ productId: number }>,
   createMovement: (payload: MovementFormInput) => ipcRenderer.invoke('inventory:create-movement', payload) as Promise<{ movementId: number }>,
   closeInventory: (payload: InventoryAuditInput) =>
