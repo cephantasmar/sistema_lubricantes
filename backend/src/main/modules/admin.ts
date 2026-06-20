@@ -186,6 +186,7 @@ export function fetchAuditLogs(db: Database.Database, input: FetchAuditLogsInput
     totalPages,
     currentPage
   }
+}
 
 function validateShift(payload: ShiftFormInput) {
   const name = payload.nombre.trim()

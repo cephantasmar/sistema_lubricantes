@@ -92,6 +92,7 @@ export function registerSystemIpc(database: Database.Database) {
 
   ipcMain.handle('admin:fetch-audit-logs', (_event, payload) => {
     return fetchAuditLogs(database, payload)
+  })
 
   registerHandler('admin:save-shift', (_event, payload) => {
     return saveShift(database, payload)
