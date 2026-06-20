@@ -1,0 +1,146 @@
+/* Estilos para Notificaciones Toast estilo Sileo (Dynamic Island) */
+
+.toast-container {
+  position: fixed;
+  top: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 90vw;
+  width: max-content;
+  pointer-events: none;
+}
+
+.toast-card {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px 10px 10px;
+  border-radius: 999px; /* Forma de píldora */
+  background: rgba(22, 22, 24, 0.85); /* Fondo oscuro estilo Sileo */
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 20px 40px -10px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  color: #fff;
+  cursor: pointer;
+  
+  /* Animación de entrada estilo spring physics pronunciada */
+  animation: toast-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+  will-change: transform, opacity;
+}
+
+.toast-card:hover {
+  transform: scale(1.02);
+  background: rgba(32, 32, 35, 0.9);
+}
+
+/* Animación de salida */
+.toast-card.toast-leaving {
+  animation: toast-out 0.4s cubic-bezier(0.36, 0, 0.66, -0.56) forwards;
+}
+
+@keyframes toast-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85) translateY(-30px);
+  }
+}
+
+/* Iconos de estado */
+.toast-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.toast-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.toast-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #fff;
+  margin: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.toast-message {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast-close {
+  display: none; /* Ocultamos el botón de cerrar manual para mantener la limpieza estilo Sileo */
+}
+
+/* Barra de progreso de autodestrucción oculta, en Sileo es invisible */
+.toast-progress {
+  display: none;
+}
+
+/* Colores específicos de estado */
+.toast-card[data-type="success"] .toast-icon-wrapper {
+  background-color: #10b981;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+}
+
+.toast-card[data-type="error"] .toast-icon-wrapper {
+  background-color: #ef4444;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+}
+
+.toast-card[data-type="warning"] .toast-icon-wrapper {
+  background-color: #f59e0b;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+}
+
+.toast-card[data-type="info"] .toast-icon-wrapper {
+  background-color: #3b82f6;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+}

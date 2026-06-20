@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import crypto from 'node:crypto'
 import type { AuthInput, AuthResult } from '../../shared/ipc/contracts'
 
 export type ActiveUser = {
@@ -12,6 +13,21 @@ export type ActiveUser = {
 }
 
 export let currentActiveUser: ActiveUser | null = null
+
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex')
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${hash}`
+}
+
+export function verifyPassword(password: string, storedHash: string): boolean {
+  if (!storedHash.includes(':')) {
+    return password === storedHash
+  }
+  const [salt, hash] = storedHash.split(':')
+  const computedHash = crypto.scryptSync(password, salt, 64).toString('hex')
+  return hash === computedHash
+}
 
 function padDatePart(value: number) {
   return String(value).padStart(2, '0')
@@ -147,6 +163,19 @@ export function logAudit(db: Database.Database, accion: string, modulo: string, 
   }
 }
 
+export function changePassword(db: Database.Database, userId: number, newPasswordPlain: string): { success: boolean; message?: string } {
+  try {
+    const hash = hashPassword(newPasswordPlain)
+    db.prepare('UPDATE usuarios SET password_hash = ?, requiere_cambio_password = 0, actualizado_en = ? WHERE id_usuario = ?')
+      .run(hash, localDateTimeSql(), userId)
+    logAudit(db, 'UPDATE', 'usuarios', userId, 'Cambio de contraseña completado')
+    return { success: true }
+  } catch (err) {
+    console.error('changePassword error:', err)
+    return { success: false, message: 'Error al cambiar contraseña' }
+  }
+}
+
 export function login(db: Database.Database, payload: AuthInput): AuthResult {
   try {
     const stmt = db.prepare(`
@@ -154,6 +183,7 @@ export function login(db: Database.Database, payload: AuthInput): AuthResult {
         u.id_usuario, 
         u.username, 
         u.password_hash, 
+        u.requiere_cambio_password,
         u.estado, 
         t.id_trabajador, 
         t.nombres
@@ -171,9 +201,7 @@ export function login(db: Database.Database, payload: AuthInput): AuthResult {
       return { success: false, message: 'Usuario inactivo.' }
     }
 
-    // Basic password check since the app is offline and local.
-    // The seed data uses 'password123' as password_hash.
-    if (user.password_hash !== payload.password_plain) {
+    if (!verifyPassword(payload.password_plain, user.password_hash)) {
       return { success: false, message: 'Contraseña incorrecta.' }
     }
 
@@ -191,6 +219,7 @@ export function login(db: Database.Database, payload: AuthInput): AuthResult {
 
     return {
       success: true,
+      requiresPasswordChange: Boolean(user.requiere_cambio_password),
       user: currentActiveUser
     }
   } catch (error) {

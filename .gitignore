@@ -6,4 +6,5 @@ coverage/
 *.log
 *.sqlite
 *.sqlite3
+*.tsbuildinfo
 Ia_info/

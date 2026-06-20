@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import schemaSql from '../../shared/database/schema.sql?raw'
+import { hashPassword } from '../modules/auth'
 
 let database: Database.Database | null = null
 
@@ -58,13 +59,15 @@ function seedDatabase(databaseInstance: Database.Database) {
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (9, 'GESTIONAR_ROLES', 'Crear y asignar roles (RBAC)', 'ADMINISTRACION', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (10, 'GESTIONAR_TRABAJADORES', 'Añadir y editar personal', 'ADMINISTRACION', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (11, 'GESTIONAR_TURNOS', 'Crear y editar horarios de trabajo', 'ADMINISTRACION', '${now}')`,
+    `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (12, 'VER_REPORTES', 'Ver reportes y métricas', 'REPORTES', '${now}')`,
+    `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (13, 'GENERAR_REPORTES', 'Exportar reportes en CSV', 'REPORTES', '${now}')`,
     `INSERT OR IGNORE INTO rol_permiso (id_rol, id_permiso) SELECT 1, id_permiso FROM permisos`,
     "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (1, 'Mañana', '08:00', '12:00', 'Turno de apertura', 1)",
     "UPDATE turnos SET nombre = 'Mañana' WHERE id_turno = 1",
     "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (2, 'Tarde', '14:00', '18:00', 'Turno de cierre', 1)",
     "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (3, 'Completo', '08:00', '18:00', 'Jornada completa', 1)",
     "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (4, 'Noche', '18:00', '22:00', 'Turno nocturno', 1)",
-    `INSERT OR IGNORE INTO usuarios (id_usuario, username, email, password_hash, estado, ultimo_acceso, creado_en, actualizado_en) VALUES (1, 'system', 'system@local', 'system', 'activo', NULL, '${now}', NULL)`,
+    `INSERT OR IGNORE INTO usuarios (id_usuario, username, email, password_hash, requiere_cambio_password, estado, ultimo_acceso, creado_en, actualizado_en) VALUES (1, 'system', 'system@local', '${hashPassword('system')}', 0, 'activo', NULL, '${now}', NULL)`,
     `INSERT OR IGNORE INTO usuario_rol (id_usuario, id_rol) VALUES (1, 1)`,
     `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (1, 1, '00000000', 'Sistema', 'Operador', NULL, NULL, '${todayDisplaySql()}', NULL, 'Sistema', 0, 'activo', '${now}', NULL)`,
     `INSERT OR IGNORE INTO trabajadores (id_trabajador, id_usuario, cedula, nombres, apellidos, telefono, direccion, fecha_ingreso, fecha_salida, cargo, salario_base, estado, creado_en, actualizado_en) VALUES (2, NULL, '10000001', 'Ana', 'Rojas', '70000001', 'Sucursal central', '${todayDisplaySql()}', NULL, 'Vendedora', 0, 'activo', '${now}', NULL)`,
@@ -109,6 +112,7 @@ function seedDatabase(databaseInstance: Database.Database) {
       referencia, observacion, realizado_por, fecha_movimiento
     ) VALUES (?, ?, 'ENTRADA', ?, ?, 'Stock inicial de prueba', ?, ?, 1, ?)
   `)
+
 
   databaseInstance.transaction(() => {
     seedStatements.forEach((statement) => {

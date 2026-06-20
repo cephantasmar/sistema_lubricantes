@@ -110,9 +110,27 @@ export type AuditLogRow = {
   fecha_evento: string
 }
 
+export type FetchAuditLogsInput = {
+  page: number
+  limit: number
+  modulo?: string | null
+  accion?: string | null
+  usuario?: string | null
+  fechaDesde?: string | null
+  fechaHasta?: string | null
+}
+
+export type FetchAuditLogsResult = {
+  logs: AuditLogRow[]
+  totalItems: number
+  totalPages: number
+  currentPage: number
+}
+
 export type AuthResult = {
   success: boolean
   message?: string
+  requiresPasswordChange?: boolean
   user?: {
     id_usuario: number
     username: string
