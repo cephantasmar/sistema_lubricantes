@@ -1,5 +1,7 @@
 import './style.css'
 import '@tabler/icons-webfont/dist/tabler-icons.css'
+import './notifications.css'
+import { showToast } from './notifications'
 import type {
   AttendanceFormInput,
   AuthInput,
@@ -3423,7 +3425,7 @@ async function openSaleDetailModal(saleId: number) {
     `
     modal.style.display = 'block'
   } catch (error) {
-    alert(error instanceof Error ? error.message : 'No se pudo obtener el detalle de la venta.')
+    showToast.error(error instanceof Error ? error.message : 'No se pudo obtener el detalle de la venta.')
   }
 }
 
