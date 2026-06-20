@@ -29,7 +29,7 @@ import type {
   SalesReportInput,
   SalesReportData,
 } from '../../shared/ipc/contracts'
-import { getCurrentUserAccess, getCurrentWorkerId, hasPermission, requirePermission } from './auth'
+import { getCurrentUserAccess, getCurrentWorkerId, hasPermission, requirePermission, logAudit } from './auth'
 
 const SYSTEM_USER_ID = 1
 
@@ -732,6 +732,7 @@ export function registerAttendanceEntry(database: Database.Database, input: Atte
         payload.id_trabajador,
       )
 
+    logAudit(database, 'INSERT', 'asistencias', attendanceId, `Registrada entrada de trabajador ${payload.id_trabajador}`)
     return attendanceId
   })
 
@@ -767,6 +768,7 @@ export function registerAttendanceExit(database: Database.Database, input: Atten
       )
       .run(exitTime, nextObservation, payload.id_trabajador, openAttendance.id_asistencia)
 
+    logAudit(database, 'UPDATE', 'asistencias', openAttendance.id_asistencia, `Registrada salida de trabajador ${payload.id_trabajador}`)
     return openAttendance.id_asistencia
   })
 
@@ -872,6 +874,7 @@ export function saveProduct(database: Database.Database, input: ProductFormInput
       }
     }
 
+    logAudit(database, isEdit ? 'UPDATE' : 'INSERT', 'productos', productId, `${isEdit ? 'Actualizado' : 'Creado'} producto ${payload.codigo}`)
     return productId
   })
 
@@ -936,6 +939,7 @@ export function createMovement(database: Database.Database, input: MovementFormI
         timestamp,
       )
 
+    logAudit(database, 'INSERT', 'inventario_movimientos', movementId, `Movimiento ${payload.tipo_movimiento} de producto ${payload.id_producto}`)
     return movementId
   })
 
@@ -1231,6 +1235,7 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
       }
     })
 
+    logAudit(database, 'INSERT', 'ventas', saleId, `Venta ${invoiceNumber} registrada`)
     return saleId
   })
 
@@ -1454,6 +1459,7 @@ export function closeInventory(database: Database.Database, input: InventoryAudi
       })
     }
 
+    logAudit(database, 'UPDATE', 'productos', null, `Cierre de inventario con ${adjusted} ajustes`)
     return {
       procesados: details.length,
       ajustados: adjusted,

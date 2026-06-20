@@ -1,5 +1,7 @@
 import './style.css'
+import './notifications.css'
 import '@tabler/icons-webfont/dist/tabler-icons.css'
+import { showToast } from './notifications'
 import type {
   AttendanceFormInput,
   AuthInput,
@@ -19,7 +21,11 @@ import type {
   SalesReportData,
 } from '@shared/ipc/contracts'
 
+<<<<<<< HEAD
+type TabName = 'bienvenida' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'asistencias' | 'administracion' | 'admin-roles' | 'admin-trabajadores' | 'admin-auditoria' | 'reportes'
+=======
 type TabName = 'home' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'administracion' | 'reportes'
+>>>>>>> origin/SPRINT3
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
 type ThemeName = 'light' | 'dark'
@@ -121,8 +127,17 @@ function canAccessTab(tabName: TabName) {
     movimientos: hasAnyPermission(['VER_MOVIMIENTOS', 'REGISTRAR_MOVIMIENTOS']),
     ventas: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
     turnos: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
+<<<<<<< HEAD
+    asistencias: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
+    administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES']),
+    'admin-roles': hasPermission('GESTIONAR_ROLES'),
+    'admin-trabajadores': hasPermission('GESTIONAR_TRABAJADORES'),
+    'admin-auditoria': Boolean(currentUser?.isAdminLike),
+    reportes: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
+=======
     administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES', 'GESTIONAR_TURNOS']),
     reportes: Boolean(currentUser?.isAdminLike),
+>>>>>>> origin/SPRINT3
   }
 
   return accessByTab[tabName]
@@ -635,7 +650,7 @@ function showTemporaryLanding() {
 function renderAppInfo(data: BootstrapData) {
   const container = document.querySelector<HTMLDivElement>('#app-info')
 
-if (!container) {
+  if (!container) {
     return
   }
 
@@ -725,6 +740,10 @@ function setClosestCardHidden(selector: string, hidden: boolean) {
 }
 
 function applyAccessControl() {
+  const canAccessRoles = hasPermission('GESTIONAR_ROLES')
+  const canAccessTrabajadores = hasPermission('GESTIONAR_TRABAJADORES')
+  const canAccessAuditoria = Boolean(currentUser?.isAdminLike)
+
   const accessByTab: Record<TabName, boolean> = {
     home: true,
     dashboard: canAccessTab('dashboard'),
@@ -732,17 +751,33 @@ function applyAccessControl() {
     movimientos: canAccessTab('movimientos'),
     ventas: canAccessTab('ventas'),
     turnos: canAccessTab('turnos'),
+<<<<<<< HEAD
+    asistencias: canAccessTab('turnos'),
+    administracion: false, // No longer a direct tab
+    'admin-roles': canAccessRoles,
+    'admin-trabajadores': canAccessTrabajadores,
+    'admin-auditoria': canAccessAuditoria,
+=======
     administracion: canAccessTab('administracion'),
+>>>>>>> origin/SPRINT3
     reportes: canAccessTab('reportes'),
   }
 
   document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
     const tabName = button.dataset.tab as TabName | undefined
-    const allowed = tabName ? accessByTab[tabName] : false
+    if (!tabName || tabName === 'administracion' || tabName === ('administracion-group' as any)) return
+    const allowed = accessByTab[tabName]
     button.hidden = !allowed
     button.toggleAttribute('aria-hidden', !allowed)
     button.disabled = !allowed
   })
+
+  // Group visibility
+  const adminAccordion = document.getElementById('admin-accordion')
+  if (adminAccordion) {
+    const hasAnyAdminAccess = canAccessRoles || canAccessTrabajadores || canAccessAuditoria
+    adminAccordion.hidden = !hasAnyAdminAccess
+  }
 
   document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
     const tabName = panel.dataset.panel as TabName | undefined
@@ -790,7 +825,7 @@ function renderProductFormOptions(data: BootstrapData) {
     renderSelectOptions(productForm.elements.namedItem('id_categoria') as HTMLSelectElement, data.references.categorias, true)
   }
 
-const productOptions = data.products.map((product) => ({
+  const productOptions = data.products.map((product) => ({
     id: product.id_producto,
     nombre: `${product.codigo} · ${product.nombre}`,
   }))
@@ -813,7 +848,7 @@ const productOptions = data.products.map((product) => ({
       ],
       false
     )
-    
+
     const trabajadoresMapped = data.references.trabajadores.map((worker) => ({
       id: worker.id_trabajador,
       nombre: worker.nombre_completo ?? `${worker.nombres} ${worker.apellidos}`,
@@ -876,7 +911,7 @@ const productOptions = data.products.map((product) => ({
 function renderPermissionsCheckboxes(data: BootstrapData) {
   const container = document.getElementById('role-permissions-container')
   if (!container) return
-  
+
   const groups: Record<string, typeof data.permissions> = {}
   data.permissions.forEach(p => {
     if (!groups[p.modulo]) groups[p.modulo] = []
@@ -1307,9 +1342,8 @@ function renderInventoryChecklist(data: BootstrapData) {
 
       return `
         <tr>
-          <td class="check-cell"><input class="check-input" data-audit-check="${product.id_producto}" type="checkbox" ${
-            revisado ? 'checked' : ''
-          } /></td>
+          <td class="check-cell"><input class="check-input" data-audit-check="${product.id_producto}" type="checkbox" ${revisado ? 'checked' : ''
+        } /></td>
           <td>
             <strong>${escapeHtml(product.nombre)}</strong>
             <small>${escapeHtml(product.codigo)}</small>
@@ -1536,10 +1570,14 @@ function renderWorkersTable(data: BootstrapData) {
       <td>${worker.id_usuario ? '<span class="badge badge--soft">Asignado</span>' : '<span class="badge badge--muted">Sin usuario</span>'}</td>
       <td><span class="badge ${worker.estado === 'activo' ? 'badge--success' : 'badge--muted'}">${escapeHtml(worker.estado)}</span></td>
       <td>
-        ${hasPermission('GESTIONAR_TRABAJADORES') ? `<button class="button button--small" type="button" data-worker-edit="${worker.id_trabajador}">Editar</button>` : ''}
+        ${hasPermission('GESTIONAR_TRABAJADORES') ? `
+          <button class="button button--small" type="button" data-worker-edit="${worker.id_trabajador}">Editar</button>
+          ${worker.id_usuario ? `<button class="button button--small button--ghost" type="button" data-worker-reset="${worker.id_trabajador}" title="Restablecer contraseña a 12345">Resetear</button>` : ''}
+        ` : ''}
       </td>
     </tr>
   `).join('')
+
   tableBody.querySelectorAll<HTMLButtonElement>('[data-worker-edit]').forEach(button => {
     button.addEventListener('click', () => {
       const workerId = Number(button.dataset.workerEdit)
@@ -1550,6 +1588,40 @@ function renderWorkersTable(data: BootstrapData) {
       }
     })
   })
+
+  tableBody.querySelectorAll<HTMLButtonElement>('[data-worker-reset]').forEach(button => {
+    button.addEventListener('click', async () => {
+      if (!confirm('¿Seguro que desea restablecer la contraseña? El usuario deberá cambiarla al ingresar.')) return
+
+      const workerId = Number(button.dataset.workerReset)
+      try {
+        const result = await window.inventoryApi.resetUserPassword(workerId)
+        if (result.success) {
+          showToast.success(result.message || 'Contraseña restablecida')
+        } else {
+          showToast.error(result.message || 'Error al restablecer contraseña')
+        }
+      } catch (err) {
+        console.error(err)
+        showToast.error('Ocurrió un error inesperado')
+      }
+    })
+  })
+}
+
+let currentAuditPage = 1
+const AUDIT_LIMIT = 20
+
+const ACTIONS_BY_MODULE: Record<string, string[]> = {
+  auth: ['LOGIN', 'LOGOUT'],
+  asistencias: ['INSERT', 'UPDATE', 'DELETE'],
+  productos: ['INSERT', 'UPDATE', 'DELETE'],
+  inventario_movimientos: ['INSERT', 'UPDATE', 'DELETE'],
+  ventas: ['INSERT', 'UPDATE', 'DELETE'],
+  roles: ['INSERT', 'UPDATE', 'DELETE'],
+  trabajadores: ['INSERT', 'UPDATE', 'DELETE'],
+  usuarios: ['INSERT', 'UPDATE', 'DELETE'],
+  reportes: ['GENERATE', 'VIEW', 'EXPORT']
 }
 
 function renderShiftsTable(data: BootstrapData) {
@@ -1618,21 +1690,179 @@ function renderShiftsTable(data: BootstrapData) {
 }
 
 function renderAuditTable(data: BootstrapData) {
+  fetchAndRenderAuditLogs()
+  
+  const moduleSelect = document.getElementById('audit-filter-module') as HTMLSelectElement
+  const actionSelect = document.getElementById('audit-filter-action') as HTMLSelectElement
+  const btnFilter = document.getElementById('btn-audit-filter')
+  const btnExport = document.getElementById('btn-audit-export')
+  const btnPrev = document.getElementById('btn-audit-prev')
+  const btnNext = document.getElementById('btn-audit-next')
+  
+  if (moduleSelect && actionSelect && !moduleSelect.dataset.bound) {
+    moduleSelect.dataset.bound = 'true'
+    moduleSelect.addEventListener('change', () => {
+      const mod = moduleSelect.value
+      actionSelect.innerHTML = '<option value="">Todas las acciones</option>'
+      if (mod && ACTIONS_BY_MODULE[mod]) {
+        ACTIONS_BY_MODULE[mod].forEach(act => {
+          const opt = document.createElement('option')
+          opt.value = act
+          opt.textContent = act
+          actionSelect.appendChild(opt)
+        })
+      } else {
+        const defaultActions = ['LOGIN', 'LOGOUT', 'INSERT', 'UPDATE', 'DELETE']
+        defaultActions.forEach(act => {
+          const opt = document.createElement('option')
+          opt.value = act
+          opt.textContent = act
+          actionSelect.appendChild(opt)
+        })
+      }
+    })
+    moduleSelect.dispatchEvent(new Event('change'))
+  }
+
+  if (btnFilter && !btnFilter.dataset.bound) {
+    btnFilter.dataset.bound = 'true'
+    btnFilter.addEventListener('click', () => {
+      currentAuditPage = 1
+      fetchAndRenderAuditLogs()
+    })
+  }
+
+  if (btnExport && !btnExport.dataset.bound) {
+    btnExport.dataset.bound = 'true'
+    btnExport.addEventListener('click', exportAuditLogs)
+  }
+
+  if (btnPrev && !btnPrev.dataset.bound) {
+    btnPrev.dataset.bound = 'true'
+    btnPrev.addEventListener('click', () => {
+      if (currentAuditPage > 1) {
+        currentAuditPage--
+        fetchAndRenderAuditLogs()
+      }
+    })
+  }
+
+  if (btnNext && !btnNext.dataset.bound) {
+    btnNext.dataset.bound = 'true'
+    btnNext.addEventListener('click', () => {
+      currentAuditPage++
+      fetchAndRenderAuditLogs()
+    })
+  }
+}
+
+async function fetchAndRenderAuditLogs() {
+  const moduleSelect = document.querySelector<HTMLSelectElement>('#audit-filter-module')
+  const actionSelect = document.querySelector<HTMLSelectElement>('#audit-filter-action')
+  const userFilter = document.querySelector<HTMLInputElement>('#audit-filter-user')
+  const dateFrom = document.querySelector<HTMLInputElement>('#audit-filter-date-from')
+  const dateTo = document.querySelector<HTMLInputElement>('#audit-filter-date-to')
+  
+  const input: any = {
+    page: currentAuditPage,
+    limit: AUDIT_LIMIT,
+    modulo: moduleSelect?.value || null,
+    accion: actionSelect?.value || null,
+    usuario: userFilter?.value || null,
+    fechaDesde: dateFrom?.value || null,
+    fechaHasta: dateTo?.value || null
+  }
+
+  try {
+    const result = await window.inventoryApi.fetchAuditLogs(input)
+    renderAuditLogsDynamic(result)
+  } catch (err) {
+    console.error('Error fetching audit logs:', err)
+  }
+}
+
+function renderAuditLogsDynamic(result: any) {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#audit-table tbody')
   if (!tableBody) return
-  if (data.auditLogs.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay eventos registrados.</td></tr>'
-    return
+  
+  if (result.logs.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay eventos registrados que coincidan.</td></tr>'
+  } else {
+    tableBody.innerHTML = result.logs.map((log: any) => `
+      <tr>
+        <td>${escapeHtml(formatDateTime(log.fecha_evento))}</td>
+        <td>${escapeHtml(log.usuario)}</td>
+        <td><span class="badge badge--soft">${escapeHtml(log.modulo)}</span></td>
+        <td><strong>${escapeHtml(log.accion)}</strong></td>
+        <td>${escapeHtml(log.descripcion ?? '')}</td>
+      </tr>
+    `).join('')
   }
-  tableBody.innerHTML = data.auditLogs.map(log => `
-    <tr>
-      <td>${escapeHtml(formatDateTime(log.fecha_evento))}</td>
-      <td>${escapeHtml(log.usuario)}</td>
-      <td><span class="badge badge--soft">${escapeHtml(log.modulo)}</span></td>
-      <td><strong>${escapeHtml(log.accion)}</strong></td>
-      <td>${escapeHtml(log.descripcion ?? '')}</td>
-    </tr>
-  `).join('')
+
+  const infoEl = document.getElementById('audit-pagination-info')
+  const pageEl = document.getElementById('audit-pagination-page')
+  const btnPrev = document.getElementById('btn-audit-prev') as HTMLButtonElement
+  const btnNext = document.getElementById('btn-audit-next') as HTMLButtonElement
+
+  if (infoEl) infoEl.textContent = `Mostrando ${result.totalItems} registros`
+  if (pageEl) pageEl.textContent = `Página ${result.currentPage} de ${result.totalPages}`
+  
+  if (btnPrev) btnPrev.disabled = result.currentPage <= 1
+  if (btnNext) btnNext.disabled = result.currentPage >= result.totalPages
+
+  if (btnPrev && btnPrev.parentElement) {
+    btnPrev.parentElement.style.display = result.totalPages <= 1 ? 'none' : 'flex'
+  }
+  
+  currentAuditPage = result.currentPage
+}
+
+async function exportAuditLogs() {
+  const moduleSelect = document.querySelector<HTMLSelectElement>('#audit-filter-module')
+  const actionSelect = document.querySelector<HTMLSelectElement>('#audit-filter-action')
+  const userFilter = document.querySelector<HTMLInputElement>('#audit-filter-user')
+  const dateFrom = document.querySelector<HTMLInputElement>('#audit-filter-date-from')
+  const dateTo = document.querySelector<HTMLInputElement>('#audit-filter-date-to')
+  
+  const input: any = {
+    page: 1,
+    limit: 5000,
+    modulo: moduleSelect?.value || null,
+    accion: actionSelect?.value || null,
+    usuario: userFilter?.value || null,
+    fechaDesde: dateFrom?.value || null,
+    fechaHasta: dateTo?.value || null
+  }
+
+  try {
+    const result = await window.inventoryApi.fetchAuditLogs(input)
+    if (result.logs.length === 0) {
+      showToast.warning('No hay datos para exportar.')
+      return
+    }
+    
+    const headers = ['Fecha', 'Usuario', 'Módulo', 'Acción', 'Detalle']
+    const rows = result.logs.map((log: any) => [
+      formatDateTime(log.fecha_evento),
+      log.usuario,
+      log.modulo,
+      log.accion,
+      log.descripcion || ''
+    ])
+    
+    const csvContent = [headers, ...rows].map((row: any[]) => row.map((cell: any) => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n')
+    
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `auditoria_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('Error exportando CSV:', err)
+    showToast.error('Error al exportar.')
+  }
 }
 
 function renderProductSearchResults(query = '') {
@@ -1974,14 +2204,14 @@ function renderSaleCart() {
           <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(Number(item.product.stock_actual)))}</td>
           <td class="excel-cell-input" style="padding: 0; vertical-align: middle;">
             <input class="cart-quantity excel-input" type="number" step="0.01" min="0.01" max="${escapeHtml(
-              item.product.stock_actual,
-            )}" value="${escapeHtml(item.cantidad)}" data-cart-quantity="${item.product.id_producto}" style="text-align: right; width: 100%; height: 100%; border: none; padding: 11px; background: transparent; outline: none;" />
+        item.product.stock_actual,
+      )}" value="${escapeHtml(item.cantidad)}" data-cart-quantity="${item.product.id_producto}" style="text-align: right; width: 100%; height: 100%; border: none; padding: 11px; background: transparent; outline: none;" />
           </td>
           <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(Number(item.product.precio_venta)))}</td>
           <td class="excel-cell-input" style="padding: 0; vertical-align: middle;">
             <input class="cart-discount excel-input" type="number" step="0.01" min="0" max="${escapeHtml(
-              item.product.precio_venta,
-            )}" value="${escapeHtml(item.descuento_unitario ?? 0)}" data-cart-discount="${item.product.id_producto}" style="text-align: right; width: 100%; height: 100%; border: none; padding: 11px; background: transparent; outline: none;" />
+        item.product.precio_venta,
+      )}" value="${escapeHtml(item.descuento_unitario ?? 0)}" data-cart-discount="${item.product.id_producto}" style="text-align: right; width: 100%; height: 100%; border: none; padding: 11px; background: transparent; outline: none;" />
           </td>
           <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(subtotalLine))}</td>
           <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(totalLine))}</td>
@@ -2118,19 +2348,19 @@ function fillProductForm(product: BootstrapData['products'][number]) {
   const form = document.querySelector<HTMLFormElement>('#product-form')
   if (!form) return
   productFormState.id_producto = product.id_producto
-  ;(form.elements.namedItem('id_producto') as HTMLInputElement).value = String(product.id_producto)
-  ;(form.elements.namedItem('codigo') as HTMLInputElement).value = product.codigo
-  ;(form.elements.namedItem('codigo_barra') as HTMLInputElement).value = product.codigo_barra ?? ''
-  ;(form.elements.namedItem('nombre') as HTMLInputElement).value = product.nombre
-  ;(form.elements.namedItem('id_marca') as HTMLSelectElement).value = String(product.id_marca)
-  ;(form.elements.namedItem('id_categoria') as HTMLSelectElement).value = String(product.id_categoria ?? '')
-  ;(form.elements.namedItem('descripcion') as HTMLTextAreaElement).value = product.descripcion ?? ''
-  ;(form.elements.namedItem('precio_costo') as HTMLInputElement).value = String(product.precio_costo)
-  ;(form.elements.namedItem('precio_venta') as HTMLInputElement).value = String(product.precio_venta)
-  ;(form.elements.namedItem('stock_minimo') as HTMLInputElement).value = String(product.stock_minimo)
-  ;(form.elements.namedItem('unidad_medida') as HTMLInputElement).value = product.unidad_medida
-  ;(form.elements.namedItem('estado') as HTMLInputElement).checked = Boolean(product.estado)
-  ;(form.elements.namedItem('stock_inicial') as HTMLInputElement).value = '0'
+    ; (form.elements.namedItem('id_producto') as HTMLInputElement).value = String(product.id_producto)
+    ; (form.elements.namedItem('codigo') as HTMLInputElement).value = product.codigo
+    ; (form.elements.namedItem('codigo_barra') as HTMLInputElement).value = product.codigo_barra ?? ''
+    ; (form.elements.namedItem('nombre') as HTMLInputElement).value = product.nombre
+    ; (form.elements.namedItem('id_marca') as HTMLSelectElement).value = String(product.id_marca)
+    ; (form.elements.namedItem('id_categoria') as HTMLSelectElement).value = String(product.id_categoria ?? '')
+    ; (form.elements.namedItem('descripcion') as HTMLTextAreaElement).value = product.descripcion ?? ''
+    ; (form.elements.namedItem('precio_costo') as HTMLInputElement).value = String(product.precio_costo)
+    ; (form.elements.namedItem('precio_venta') as HTMLInputElement).value = String(product.precio_venta)
+    ; (form.elements.namedItem('stock_minimo') as HTMLInputElement).value = String(product.stock_minimo)
+    ; (form.elements.namedItem('unidad_medida') as HTMLInputElement).value = product.unidad_medida
+    ; (form.elements.namedItem('estado') as HTMLInputElement).checked = Boolean(product.estado)
+    ; (form.elements.namedItem('stock_inicial') as HTMLInputElement).value = '0'
   const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]')
   if (submitButton) submitButton.textContent = 'Actualizar producto'
 }
@@ -2140,10 +2370,10 @@ function resetProductForm() {
   if (!form) return
   productFormState.id_producto = null
   form.reset()
-  ;(form.elements.namedItem('estado') as HTMLInputElement).checked = true
-  ;(form.elements.namedItem('stock_minimo') as HTMLInputElement).value = '0'
-  ;(form.elements.namedItem('stock_inicial') as HTMLInputElement).value = '0'
-  ;(form.elements.namedItem('codigo') as HTMLInputElement).focus()
+    ; (form.elements.namedItem('estado') as HTMLInputElement).checked = true
+    ; (form.elements.namedItem('stock_minimo') as HTMLInputElement).value = '0'
+    ; (form.elements.namedItem('stock_inicial') as HTMLInputElement).value = '0'
+    ; (form.elements.namedItem('codigo') as HTMLInputElement).focus()
   const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]')
   if (submitButton) submitButton.textContent = 'Guardar producto'
 }
@@ -2152,11 +2382,16 @@ function fillRoleForm(role: BootstrapData['roles'][number]) {
   const form = document.querySelector<HTMLFormElement>('#role-form')
   if (!form) return
   roleFormState.id_rol = role.id_rol
-  ;(form.elements.namedItem('id_rol') as HTMLInputElement).value = String(role.id_rol)
-  ;(form.elements.namedItem('nombre') as HTMLInputElement).value = role.nombre
-  ;(form.elements.namedItem('descripcion') as HTMLTextAreaElement).value = role.descripcion ?? ''
-  ;(form.elements.namedItem('estado') as HTMLInputElement).checked = Boolean(role.estado)
-  
+    ; (form.elements.namedItem('id_rol') as HTMLInputElement).value = String(role.id_rol)
+
+  const title = document.getElementById('role-form-title')
+  if (title) title.textContent = 'Editar Rol'
+  const formView = document.getElementById('roles-form-view')
+  if (formView) formView.style.display = 'flex'
+    ; (form.elements.namedItem('nombre') as HTMLInputElement).value = role.nombre
+    ; (form.elements.namedItem('descripcion') as HTMLTextAreaElement).value = role.descripcion ?? ''
+    ; (form.elements.namedItem('estado') as HTMLInputElement).checked = Boolean(role.estado)
+
   form.querySelectorAll<HTMLInputElement>('input[name="permisos[]"]').forEach(cb => cb.checked = false)
   if (role.permisos) {
     role.permisos.forEach(p => {
@@ -2174,7 +2409,7 @@ function resetRoleForm() {
   if (!form) return
   roleFormState.id_rol = null
   form.reset()
-  ;(form.elements.namedItem('estado') as HTMLInputElement).checked = true
+    ; (form.elements.namedItem('estado') as HTMLInputElement).checked = true
   form.querySelectorAll<HTMLInputElement>('input[name="permisos[]"]').forEach(cb => cb.checked = false)
   const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]')
   if (btn) btn.textContent = 'Guardar rol'
@@ -2184,15 +2419,20 @@ function fillWorkerForm(worker: BootstrapData['workers'][number]) {
   const form = document.querySelector<HTMLFormElement>('#worker-form')
   if (!form) return
   workerFormState.id_trabajador = worker.id_trabajador
-  ;(form.elements.namedItem('id_trabajador') as HTMLInputElement).value = String(worker.id_trabajador)
-  ;(form.elements.namedItem('nombres') as HTMLInputElement).value = worker.nombres
-  ;(form.elements.namedItem('apellidos') as HTMLInputElement).value = worker.apellidos
-  ;(form.elements.namedItem('cedula') as HTMLInputElement).value = worker.cedula ?? ''
-  ;(form.elements.namedItem('cargo') as HTMLInputElement).value = worker.cargo ?? ''
-  ;(form.elements.namedItem('salario_base') as HTMLInputElement).value = worker.salario_base ? String(worker.salario_base) : ''
-  ;(form.elements.namedItem('estado') as HTMLInputElement).checked = worker.estado === 'activo'
-  ;(form.elements.namedItem('id_rol') as HTMLSelectElement).value = worker.id_rol ? String(worker.id_rol) : ''
-  ;(form.elements.namedItem('crear_usuario') as HTMLInputElement).checked = false
+    ; (form.elements.namedItem('id_trabajador') as HTMLInputElement).value = String(worker.id_trabajador)
+
+  const title = document.getElementById('worker-form-title')
+  if (title) title.textContent = 'Editar Trabajador'
+  const formView = document.getElementById('workers-form-view')
+  if (formView) formView.style.display = 'flex'
+    ; (form.elements.namedItem('nombres') as HTMLInputElement).value = worker.nombres
+    ; (form.elements.namedItem('apellidos') as HTMLInputElement).value = worker.apellidos
+    ; (form.elements.namedItem('cedula') as HTMLInputElement).value = worker.cedula ?? ''
+    ; (form.elements.namedItem('cargo') as HTMLInputElement).value = worker.cargo ?? ''
+    ; (form.elements.namedItem('salario_base') as HTMLInputElement).value = worker.salario_base ? String(worker.salario_base) : ''
+    ; (form.elements.namedItem('estado') as HTMLInputElement).checked = worker.estado === 'activo'
+    ; (form.elements.namedItem('id_rol') as HTMLSelectElement).value = worker.id_rol ? String(worker.id_rol) : ''
+    ; (form.elements.namedItem('crear_usuario') as HTMLInputElement).checked = false
   const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]')
   if (btn) btn.textContent = 'Actualizar trabajador'
 }
@@ -2202,7 +2442,7 @@ function resetWorkerForm() {
   if (!form) return
   workerFormState.id_trabajador = null
   form.reset()
-  ;(form.elements.namedItem('estado') as HTMLInputElement).checked = true
+    ; (form.elements.namedItem('estado') as HTMLInputElement).checked = true
   const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]')
   if (btn) btn.textContent = 'Guardar trabajador'
 }
@@ -2237,10 +2477,19 @@ function resetShiftForm() {
 
 function setStatus(targetId: string, message: string, kind: 'info' | 'success' | 'error' = 'info') {
   const target = document.querySelector<HTMLElement>(`#${targetId}`)
-  if (!target) return
-  target.textContent = message
-  target.dataset.kind = kind
+  if (target) {
+    target.textContent = message
+    target.dataset.kind = kind
+  }
 
+  // Trigger premium toast notifications
+  if (kind === 'success') {
+    showToast.success(message)
+  } else if (kind === 'error') {
+    showToast.error(message)
+  } else {
+    showToast.info(message)
+  }
 }
 
 function getFriendlyErrorMessage(error: unknown, fallback: string) {
@@ -2336,6 +2585,8 @@ async function refresh() {
   renderSaleCart()
 }
 
+let isBootstrapEventsAttached = false
+
 async function bootstrap() {
   appInfoSnapshot = await window.inventoryApi.getAppInfo()
   startClock()
@@ -2348,6 +2599,9 @@ async function bootstrap() {
     return
   }
   bootstrapInitialized = true
+
+  if (isBootstrapEventsAttached) return
+  isBootstrapEventsAttached = true
 
   const productForm = document.querySelector<HTMLFormElement>('#product-form')
   const movementForm = document.querySelector<HTMLFormElement>('#movement-form')
@@ -2909,16 +3163,27 @@ async function bootstrap() {
         setStatus('attendance-status', 'Entrada registrada correctamente.', 'success')
       }
 
-      ;(attendanceForm.elements.namedItem('observacion') as HTMLTextAreaElement).value = ''
+      ; (attendanceForm.elements.namedItem('observacion') as HTMLTextAreaElement).value = ''
       await refresh()
     } catch (error) {
       setStatus('attendance-status', getFriendlyErrorMessage(error, 'No se pudo registrar la asistencia.'), 'error')
     }
   })
 
-  document.querySelector<HTMLButtonElement>('#role-form-reset')?.addEventListener('click', () => {
+  document.querySelector<HTMLButtonElement>('#btn-new-role')?.addEventListener('click', () => {
     resetRoleForm()
+    const title = document.getElementById('role-form-title')
+    if (title) title.textContent = 'Crear Nuevo Rol'
     setStatus('role-status', 'Formulario listo para un nuevo rol.', 'info')
+
+    const formView = document.getElementById('roles-form-view')
+    if (formView) formView.style.display = 'flex'
+  })
+
+  document.querySelector<HTMLButtonElement>('#btn-cancel-role')?.addEventListener('click', () => {
+    const formView = document.getElementById('roles-form-view')
+    if (formView) formView.style.display = 'none'
+    resetRoleForm()
   })
   roleForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
@@ -2940,14 +3205,28 @@ async function bootstrap() {
       setStatus('role-status', 'Rol guardado correctamente.', 'success')
       resetRoleForm()
       await refresh()
+
+      const formView = document.getElementById('roles-form-view')
+      if (formView) formView.style.display = 'none'
     } catch (error) {
       setStatus('role-status', error instanceof Error ? error.message : 'Error al guardar.', 'error')
     }
   })
 
-  document.querySelector<HTMLButtonElement>('#worker-form-reset')?.addEventListener('click', () => {
+  document.querySelector<HTMLButtonElement>('#btn-new-worker')?.addEventListener('click', () => {
     resetWorkerForm()
+    const title = document.getElementById('worker-form-title')
+    if (title) title.textContent = 'Crear Nuevo Trabajador'
     setStatus('worker-status', 'Formulario listo para un nuevo trabajador.', 'info')
+
+    const formView = document.getElementById('workers-form-view')
+    if (formView) formView.style.display = 'flex'
+  })
+
+  document.querySelector<HTMLButtonElement>('#btn-cancel-worker')?.addEventListener('click', () => {
+    const formView = document.getElementById('workers-form-view')
+    if (formView) formView.style.display = 'none'
+    resetWorkerForm()
   })
   workerForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
@@ -2972,6 +3251,9 @@ async function bootstrap() {
       setStatus('worker-status', 'Trabajador guardado correctamente.', 'success')
       resetWorkerForm()
       await refresh()
+
+      const formView = document.getElementById('workers-form-view')
+      if (formView) formView.style.display = 'none'
     } catch (error) {
       setStatus('worker-status', error instanceof Error ? error.message : 'Error al guardar.', 'error')
     }
@@ -3047,8 +3329,18 @@ async function bootstrap() {
 
   document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
     button.addEventListener('click', () => {
-      const tabName = button.dataset.tab as TabName | undefined
-      if (tabName) setActiveTab(tabName)
+      const tabName = button.dataset.tab as TabName | string | undefined
+      if (tabName === 'administracion-group') {
+        const toggle = document.getElementById('admin-accordion-toggle')
+        const content = document.getElementById('admin-accordion-content')
+        if (toggle && content) {
+          const isExpanded = toggle.getAttribute('aria-expanded') === 'true'
+          toggle.setAttribute('aria-expanded', (!isExpanded).toString())
+          content.style.display = isExpanded ? 'none' : 'flex'
+        }
+        return
+      }
+      if (tabName) setActiveTab(tabName as TabName)
     })
   })
 
@@ -3204,7 +3496,7 @@ async function openSaleDetailModal(saleId: number) {
     `
     modal.style.display = 'block'
   } catch (error) {
-    alert(error instanceof Error ? error.message : 'No se pudo obtener el detalle de la venta.')
+    showToast.error(error instanceof Error ? error.message : 'No se pudo obtener el detalle de la venta.')
   }
 }
 
@@ -3239,15 +3531,147 @@ function initLogin() {
       })
       if (result.success) {
         currentUser = result.user ?? null
+<<<<<<< HEAD
+
+        if (result.requiresPasswordChange) {
+          // Show password change overlay, keep main-app hidden
+          document.getElementById('login-overlay')!.style.display = 'none'
+          document.getElementById('password-change-overlay')!.style.display = 'flex'
+        } else {
+          document.getElementById('login-overlay')!.style.display = 'none'
+          document.getElementById('main-app')!.style.display = 'block'
+          setActiveTab('bienvenida')
+          void bootstrap()
+        }
+=======
         document.getElementById('login-overlay')!.style.display = 'none'
         document.getElementById('main-app')!.style.display = 'block'
         setActiveTab('home')
         void bootstrap()
+>>>>>>> origin/SPRINT3
       } else {
         setStatus('login-status', result.message ?? 'Credenciales incorrectas', 'error')
       }
     } catch (err) {
       setStatus('login-status', 'Error de conexión con el backend', 'error')
+    }
+  })
+
+  const passwordChangeForm = document.querySelector<HTMLFormElement>('#password-change-form')
+  const newPasswordInput = document.querySelector<HTMLInputElement>('#new-password-input')
+  const strengthFill = document.querySelector<HTMLDivElement>('#password-strength-fill')
+  const strengthText = document.querySelector<HTMLSpanElement>('#password-strength-text')
+  const reqLength = document.getElementById('req-length')
+  const reqLetter = document.getElementById('req-letter')
+  const reqNumber = document.getElementById('req-number')
+
+  const updateRequirement = (el: HTMLElement | null, met: boolean) => {
+    if (!el) return
+    el.className = `requirement ${met ? 'met' : 'unmet'}`
+    const icon = el.querySelector('i')
+    if (icon) {
+      icon.className = met ? 'ti ti-circle-check' : 'ti ti-circle-x'
+    }
+  }
+
+  const resetPasswordStrength = () => {
+    if (strengthFill) {
+      strengthFill.style.width = '0%'
+      strengthFill.style.backgroundColor = '#cbd5e1'
+    }
+    if (strengthText) {
+      strengthText.textContent = 'Muy débil'
+      strengthText.style.color = 'var(--muted)'
+    }
+    updateRequirement(reqLength, false)
+    updateRequirement(reqLetter, false)
+    updateRequirement(reqNumber, false)
+  }
+
+  newPasswordInput?.addEventListener('input', (event) => {
+    const val = (event.target as HTMLInputElement).value
+    const hasMinLength = val.length >= 8
+    const hasLet = /[a-zA-Z]/.test(val)
+    const hasNum = /[0-9]/.test(val)
+
+    updateRequirement(reqLength, hasMinLength)
+    updateRequirement(reqLetter, hasLet)
+    updateRequirement(reqNumber, hasNum)
+
+    let score = 0
+    if (hasMinLength) score++
+    if (hasLet) score++
+    if (hasNum) score++
+
+    if (val.length === 0) {
+      resetPasswordStrength()
+    } else {
+      let width = '0%'
+      let color = 'var(--danger)'
+      let text = 'Muy débil'
+
+      if (score === 1) {
+        width = '33%'
+        color = 'var(--danger)'
+        text = 'Débil'
+      } else if (score === 2) {
+        width = '66%'
+        color = '#f59e0b' // yellow/orange
+        text = 'Media'
+      } else if (score === 3) {
+        width = '100%'
+        color = 'var(--success)'
+        text = 'Fuerte'
+      }
+
+      if (strengthFill) {
+        strengthFill.style.width = width
+        strengthFill.style.backgroundColor = color
+      }
+      if (strengthText) {
+        strengthText.textContent = text
+        strengthText.style.color = color
+      }
+    }
+  })
+
+  passwordChangeForm?.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    const formData = new FormData(passwordChangeForm)
+    const newPassword = String(formData.get('new_password') ?? '')
+    const confirmPassword = String(formData.get('confirm_password') ?? '')
+
+    if (newPassword !== confirmPassword) {
+      setStatus('password-change-status', 'Las contraseñas no coinciden', 'error')
+      return
+    }
+
+    if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setStatus('password-change-status', 'La contraseña debe tener al menos 8 caracteres, letras y números', 'error')
+      return
+    }
+
+    if (!currentUser) return
+
+    try {
+      const result = await window.inventoryApi.changePassword({
+        userId: currentUser.id_usuario,
+        newPasswordPlain: newPassword
+      })
+
+      if (result.success) {
+        document.getElementById('password-change-overlay')!.style.display = 'none'
+        document.getElementById('main-app')!.style.display = 'block'
+        passwordChangeForm.reset()
+        resetPasswordStrength()
+        setStatus('password-change-status', '', 'info')
+        setActiveTab('bienvenida')
+        void bootstrap()
+      } else {
+        setStatus('password-change-status', result.message ?? 'Error al cambiar contraseña', 'error')
+      }
+    } catch (err) {
+      setStatus('password-change-status', 'Error de conexión con el servidor', 'error')
     }
   })
   const logoutBtn = document.getElementById('logout-btn')
@@ -3361,7 +3785,7 @@ async function loadSalesReportData() {
     renderDailyTrendChart('daily-chart-container', reportData.charts.daily)
 
   } catch (error) {
-    alert(error instanceof Error ? error.message : 'Error al generar el reporte.')
+    showToast.error(error instanceof Error ? error.message : 'Error al generar el reporte.')
   } finally {
     if (btn) {
       btn.disabled = false

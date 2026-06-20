@@ -13,8 +13,13 @@ import {
   saveProduct,
   getSalesReport,
 } from '../modules/store'
+<<<<<<< HEAD
+import { changePassword, login } from '../modules/auth'
+import { fetchAuditLogs, resetUserPassword, saveRole, saveWorker } from '../modules/admin'
+=======
 import { login } from '../modules/auth'
 import { deleteShift, saveRole, saveShift, saveWorker, setShiftState } from '../modules/admin'
+>>>>>>> origin/SPRINT3
 
 function registerHandler(channel: string, handler: Parameters<typeof ipcMain.handle>[1]) {
   ipcMain.removeHandler(channel)
@@ -82,6 +87,18 @@ export function registerSystemIpc(database: Database.Database) {
     return saveWorker(database, payload)
   })
 
+<<<<<<< HEAD
+  ipcMain.handle('admin:reset-user-password', (_event, workerId) => {
+    return resetUserPassword(database, workerId)
+  })
+
+  ipcMain.handle('auth:change-password', (_event, payload) => {
+    return changePassword(database, payload.userId, payload.newPasswordPlain)
+  })
+
+  ipcMain.handle('admin:fetch-audit-logs', (_event, payload) => {
+    return fetchAuditLogs(database, payload)
+=======
   registerHandler('admin:save-shift', (_event, payload) => {
     return saveShift(database, payload)
   })
@@ -92,6 +109,7 @@ export function registerSystemIpc(database: Database.Database) {
 
   registerHandler('admin:set-shift-state', (_event, shiftId, enabled) => {
     return setShiftState(database, shiftId, enabled)
+>>>>>>> origin/SPRINT3
   })
 
 }
