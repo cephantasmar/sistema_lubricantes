@@ -1216,22 +1216,195 @@ function renderWorkersTable(data: BootstrapData) {
   })
 }
 
+let currentAuditPage = 1
+const AUDIT_LIMIT = 20
+
+const ACTIONS_BY_MODULE: Record<string, string[]> = {
+  auth: ['LOGIN', 'LOGOUT'],
+  asistencias: ['INSERT', 'UPDATE', 'DELETE'],
+  productos: ['INSERT', 'UPDATE', 'DELETE'],
+  inventario_movimientos: ['INSERT', 'UPDATE', 'DELETE'],
+  ventas: ['INSERT', 'UPDATE', 'DELETE'],
+  roles: ['INSERT', 'UPDATE', 'DELETE'],
+  trabajadores: ['INSERT', 'UPDATE', 'DELETE'],
+  usuarios: ['INSERT', 'UPDATE', 'DELETE'],
+  reportes: ['GENERATE', 'VIEW', 'EXPORT']
+}
+
 function renderAuditTable(data: BootstrapData) {
+  fetchAndRenderAuditLogs()
+  
+  const moduleSelect = document.getElementById('audit-filter-module') as HTMLSelectElement
+  const actionSelect = document.getElementById('audit-filter-action') as HTMLSelectElement
+  const btnFilter = document.getElementById('btn-audit-filter')
+  const btnExport = document.getElementById('btn-audit-export')
+  const btnPrev = document.getElementById('btn-audit-prev')
+  const btnNext = document.getElementById('btn-audit-next')
+  
+  if (moduleSelect && actionSelect && !moduleSelect.dataset.bound) {
+    moduleSelect.dataset.bound = 'true'
+    moduleSelect.addEventListener('change', () => {
+      const mod = moduleSelect.value
+      actionSelect.innerHTML = '<option value="">Todas las acciones</option>'
+      if (mod && ACTIONS_BY_MODULE[mod]) {
+        ACTIONS_BY_MODULE[mod].forEach(act => {
+          const opt = document.createElement('option')
+          opt.value = act
+          opt.textContent = act
+          actionSelect.appendChild(opt)
+        })
+      } else {
+        const defaultActions = ['LOGIN', 'LOGOUT', 'INSERT', 'UPDATE', 'DELETE']
+        defaultActions.forEach(act => {
+          const opt = document.createElement('option')
+          opt.value = act
+          opt.textContent = act
+          actionSelect.appendChild(opt)
+        })
+      }
+    })
+    moduleSelect.dispatchEvent(new Event('change'))
+  }
+
+  if (btnFilter && !btnFilter.dataset.bound) {
+    btnFilter.dataset.bound = 'true'
+    btnFilter.addEventListener('click', () => {
+      currentAuditPage = 1
+      fetchAndRenderAuditLogs()
+    })
+  }
+
+  if (btnExport && !btnExport.dataset.bound) {
+    btnExport.dataset.bound = 'true'
+    btnExport.addEventListener('click', exportAuditLogs)
+  }
+
+  if (btnPrev && !btnPrev.dataset.bound) {
+    btnPrev.dataset.bound = 'true'
+    btnPrev.addEventListener('click', () => {
+      if (currentAuditPage > 1) {
+        currentAuditPage--
+        fetchAndRenderAuditLogs()
+      }
+    })
+  }
+
+  if (btnNext && !btnNext.dataset.bound) {
+    btnNext.dataset.bound = 'true'
+    btnNext.addEventListener('click', () => {
+      currentAuditPage++
+      fetchAndRenderAuditLogs()
+    })
+  }
+}
+
+async function fetchAndRenderAuditLogs() {
+  const moduleSelect = document.querySelector<HTMLSelectElement>('#audit-filter-module')
+  const actionSelect = document.querySelector<HTMLSelectElement>('#audit-filter-action')
+  const userFilter = document.querySelector<HTMLInputElement>('#audit-filter-user')
+  const dateFrom = document.querySelector<HTMLInputElement>('#audit-filter-date-from')
+  const dateTo = document.querySelector<HTMLInputElement>('#audit-filter-date-to')
+  
+  const input: any = {
+    page: currentAuditPage,
+    limit: AUDIT_LIMIT,
+    modulo: moduleSelect?.value || null,
+    accion: actionSelect?.value || null,
+    usuario: userFilter?.value || null,
+    fechaDesde: dateFrom?.value || null,
+    fechaHasta: dateTo?.value || null
+  }
+
+  try {
+    const result = await window.inventoryApi.fetchAuditLogs(input)
+    renderAuditLogsDynamic(result)
+  } catch (err) {
+    console.error('Error fetching audit logs:', err)
+  }
+}
+
+function renderAuditLogsDynamic(result: any) {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#audit-table tbody')
   if (!tableBody) return
-  if (data.auditLogs.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay eventos registrados.</td></tr>'
-    return
+  
+  if (result.logs.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay eventos registrados que coincidan.</td></tr>'
+  } else {
+    tableBody.innerHTML = result.logs.map((log: any) => `
+      <tr>
+        <td>${escapeHtml(formatDateTime(log.fecha_evento))}</td>
+        <td>${escapeHtml(log.usuario)}</td>
+        <td><span class="badge badge--soft">${escapeHtml(log.modulo)}</span></td>
+        <td><strong>${escapeHtml(log.accion)}</strong></td>
+        <td>${escapeHtml(log.descripcion ?? '')}</td>
+      </tr>
+    `).join('')
   }
-  tableBody.innerHTML = data.auditLogs.map(log => `
-    <tr>
-      <td>${escapeHtml(formatDateTime(log.fecha_evento))}</td>
-      <td>${escapeHtml(log.usuario)}</td>
-      <td><span class="badge badge--soft">${escapeHtml(log.modulo)}</span></td>
-      <td><strong>${escapeHtml(log.accion)}</strong></td>
-      <td>${escapeHtml(log.descripcion ?? '')}</td>
-    </tr>
-  `).join('')
+
+  const infoEl = document.getElementById('audit-pagination-info')
+  const pageEl = document.getElementById('audit-pagination-page')
+  const btnPrev = document.getElementById('btn-audit-prev') as HTMLButtonElement
+  const btnNext = document.getElementById('btn-audit-next') as HTMLButtonElement
+
+  if (infoEl) infoEl.textContent = `Mostrando ${result.totalItems} registros`
+  if (pageEl) pageEl.textContent = `Página ${result.currentPage} de ${result.totalPages}`
+  
+  if (btnPrev) btnPrev.disabled = result.currentPage <= 1
+  if (btnNext) btnNext.disabled = result.currentPage >= result.totalPages
+
+  if (btnPrev && btnPrev.parentElement) {
+    btnPrev.parentElement.style.display = result.totalPages <= 1 ? 'none' : 'flex'
+  }
+  
+  currentAuditPage = result.currentPage
+}
+
+async function exportAuditLogs() {
+  const moduleSelect = document.querySelector<HTMLSelectElement>('#audit-filter-module')
+  const actionSelect = document.querySelector<HTMLSelectElement>('#audit-filter-action')
+  const userFilter = document.querySelector<HTMLInputElement>('#audit-filter-user')
+  const dateFrom = document.querySelector<HTMLInputElement>('#audit-filter-date-from')
+  const dateTo = document.querySelector<HTMLInputElement>('#audit-filter-date-to')
+  
+  const input: any = {
+    page: 1,
+    limit: 5000,
+    modulo: moduleSelect?.value || null,
+    accion: actionSelect?.value || null,
+    usuario: userFilter?.value || null,
+    fechaDesde: dateFrom?.value || null,
+    fechaHasta: dateTo?.value || null
+  }
+
+  try {
+    const result = await window.inventoryApi.fetchAuditLogs(input)
+    if (result.logs.length === 0) {
+      alert('No hay datos para exportar.')
+      return
+    }
+    
+    const headers = ['Fecha', 'Usuario', 'Módulo', 'Acción', 'Detalle']
+    const rows = result.logs.map((log: any) => [
+      formatDateTime(log.fecha_evento),
+      log.usuario,
+      log.modulo,
+      log.accion,
+      log.descripcion || ''
+    ])
+    
+    const csvContent = [headers, ...rows].map((row: any[]) => row.map((cell: any) => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n')
+    
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `auditoria_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('Error exportando CSV:', err)
+    alert('Error al exportar.')
+  }
 }
 
 function renderProductSearchResults(query = '') {

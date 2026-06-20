@@ -57,6 +57,8 @@ function seedDatabase(databaseInstance: Database.Database) {
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (8, 'REGISTRAR_ASISTENCIAS', 'Marcar entrada y salida', 'ASISTENCIAS', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (9, 'GESTIONAR_ROLES', 'Crear y asignar roles (RBAC)', 'ADMINISTRACION', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (10, 'GESTIONAR_TRABAJADORES', 'Añadir y editar personal', 'ADMINISTRACION', '${now}')`,
+    `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (11, 'VER_REPORTES', 'Ver reportes y métricas', 'REPORTES', '${now}')`,
+    `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (12, 'GENERAR_REPORTES', 'Exportar reportes en CSV', 'REPORTES', '${now}')`,
     `INSERT OR IGNORE INTO rol_permiso (id_rol, id_permiso) SELECT 1, id_permiso FROM permisos`,
     "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (1, 'Mañana', '08:00', '12:00', 'Turno de apertura', 1)",
     "UPDATE turnos SET nombre = 'Mañana' WHERE id_turno = 1",
@@ -122,7 +124,7 @@ function seedDatabase(databaseInstance: Database.Database) {
   `)
 
   const insertStockAdjustment = databaseInstance.prepare(`
-    INSERT INTO inventario_movimientos (
+    INSERT OR IGNORE INTO inventario_movimientos (
       id_movimiento, id_producto, tipo_movimiento, cantidad, costo_unitario, motivo,
       referencia, observacion, realizado_por, fecha_movimiento
     ) VALUES (?, ?, 'AJUSTE_POS', ?, ?, 'Reposicion de stock demo', ?, ?, 1, ?)

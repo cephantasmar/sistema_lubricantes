@@ -10,7 +10,7 @@
 <body>
   <div id="login-overlay" class="login-overlay">
     <div class="login-card">
-      <div class="brand-block">
+      <div class="">
         <p class="brand-block__kicker">SISTEMA LUBRICANTES</p>
         <h2>Iniciar Sesión</h2>
       </div>
@@ -1123,6 +1123,54 @@
                     <h2>Log de Actividades</h2>
                   </div>
                 </div>
+                
+                <div class="table-actions" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; background: var(--bg-surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+                  <label class="field" style="flex: 1; min-width: 150px;">
+                    <span class="field__label">Módulo</span>
+                    <select id="audit-filter-module" class="input">
+                      <option value="">Todos los módulos</option>
+                      <option value="auth">auth</option>
+                      <option value="asistencias">asistencias</option>
+                      <option value="productos">productos</option>
+                      <option value="inventario_movimientos">inventario</option>
+                      <option value="ventas">ventas</option>
+                      <option value="roles">roles</option>
+                      <option value="trabajadores">trabajadores</option>
+                      <option value="usuarios">usuarios</option>
+                      <option value="reportes">reportes</option>
+                    </select>
+                  </label>
+                  <label class="field" style="flex: 1; min-width: 150px;">
+                    <span class="field__label">Acción</span>
+                    <select id="audit-filter-action" class="input">
+                      <option value="">Todas las acciones</option>
+                    </select>
+                  </label>
+                  <label class="field" style="flex: 1; min-width: 150px;">
+                    <span class="field__label">Usuario</span>
+                    <input type="text" id="audit-filter-user" class="input" placeholder="Buscar por usuario..." />
+                  </label>
+                  <label class="field" style="flex: 1; min-width: 150px;">
+                    <span class="field__label">Fecha Desde</span>
+                    <input type="date" id="audit-filter-date-from" class="input" />
+                  </label>
+                  <label class="field" style="flex: 1; min-width: 150px;">
+                    <span class="field__label">Fecha Hasta</span>
+                    <input type="date" id="audit-filter-date-to" class="input" />
+                  </label>
+                  <div class="form-actions" style="margin-top: 0; align-items: center; justify-content: flex-end;">
+                    <button id="btn-audit-filter" class="button button--secondary">Filtrar</button>
+                    <button id="btn-audit-export" class="button button--primary" style="margin-left: 0.5rem; display: inline-flex; align-items: center; gap: 0.5rem;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+                        <path d="M11.5 21h-4.5a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v5m-5 6h7m-3 -3l3 3l-3 3" />
+                      </svg>
+                      Exportar CSV
+                    </button>
+                  </div>
+                </div>
+
                 <div class="table-wrap">
                   <table class="data-table" id="audit-table">
                     <thead>
@@ -1136,6 +1184,15 @@
                     </thead>
                     <tbody></tbody>
                   </table>
+                </div>
+                
+                <div class="pagination-controls" id="audit-pagination" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+                  <span id="audit-pagination-info">Mostrando 0 registros</span>
+                  <div style="display: flex; gap: 0.5rem;">
+                    <button id="btn-audit-prev" class="button button--secondary" disabled>Anterior</button>
+                    <span id="audit-pagination-page" style="line-height: 38px;">Página 1</span>
+                    <button id="btn-audit-next" class="button button--secondary" disabled>Siguiente</button>
+                  </div>
                 </div>
               </section>
             </div>

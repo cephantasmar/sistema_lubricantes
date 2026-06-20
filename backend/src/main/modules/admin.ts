@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3'
-import type { RoleFormInput, WorkerFormInput } from '../../shared/ipc/contracts'
+import type { RoleFormInput, WorkerFormInput, FetchAuditLogsInput, FetchAuditLogsResult, AuditLogRow } from '../../shared/ipc/contracts'
 import { hashPassword, logAudit, requirePermission } from './auth'
 
 function getNextId(db: Database.Database, tableName: string, idColumn: string): number {
@@ -119,5 +119,71 @@ export function resetUserPassword(db: Database.Database, workerId: number): { su
   } catch (err) {
     console.error('Error resetUserPassword:', err)
     return { success: false, message: 'Error al restablecer contraseña.' }
+  }
+}
+
+export function fetchAuditLogs(db: Database.Database, input: FetchAuditLogsInput): FetchAuditLogsResult {
+  const { page, limit, modulo, accion, usuario, fechaDesde, fechaHasta } = input
+  
+  const conditions: string[] = []
+  const params: any[] = []
+
+  if (modulo) {
+    conditions.push('l.modulo = ?')
+    params.push(modulo)
+  }
+  
+  if (accion) {
+    conditions.push('l.accion = ?')
+    params.push(accion)
+  }
+
+  if (usuario) {
+    conditions.push("COALESCE(u.username, 'Sistema') LIKE ?")
+    params.push(`%${usuario}%`)
+  }
+  
+  if (fechaDesde && !fechaHasta) {
+    conditions.push('l.fecha_evento >= ?')
+    params.push(`${fechaDesde} 00:00:00`)
+    conditions.push('l.fecha_evento <= ?')
+    params.push(`${fechaDesde} 23:59:59`)
+  } else if (!fechaDesde && fechaHasta) {
+    conditions.push('l.fecha_evento >= ?')
+    params.push(`${fechaHasta} 00:00:00`)
+    conditions.push('l.fecha_evento <= ?')
+    params.push(`${fechaHasta} 23:59:59`)
+  } else if (fechaDesde && fechaHasta) {
+    conditions.push('l.fecha_evento >= ?')
+    params.push(`${fechaDesde} 00:00:00`)
+    conditions.push('l.fecha_evento <= ?')
+    params.push(`${fechaHasta} 23:59:59`)
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  
+  const countStmt = db.prepare(`SELECT COUNT(*) as total FROM auditoria_logs l ${whereClause}`)
+  const countResult = countStmt.get(...params) as { total: number }
+  const totalItems = countResult.total
+  const totalPages = Math.ceil(totalItems / limit) || 1
+  const currentPage = Math.min(Math.max(1, page), totalPages)
+  const offset = (currentPage - 1) * limit
+
+  const dataStmt = db.prepare(`
+    SELECT l.id_log, COALESCE(u.username, 'Sistema') AS usuario, l.accion, l.modulo, l.descripcion, l.fecha_evento 
+    FROM auditoria_logs l 
+    LEFT JOIN usuarios u ON u.id_usuario = l.id_usuario 
+    ${whereClause}
+    ORDER BY l.fecha_evento DESC
+    LIMIT ? OFFSET ?
+  `)
+  
+  const logs = dataStmt.all(...params, limit, offset) as AuditLogRow[]
+
+  return {
+    logs,
+    totalItems,
+    totalPages,
+    currentPage
   }
 }

@@ -16,7 +16,9 @@ import type {
   WorkerFormInput,
   AttendanceInput,
   SalesReportInput,
-  SalesReportData
+  SalesReportData,
+  FetchAuditLogsInput,
+  FetchAuditLogsResult
 } from '@shared/ipc/contracts'
 
 declare global {
@@ -38,6 +40,7 @@ declare global {
       saveWorker: (payload: WorkerFormInput) => Promise<{ workerId: number }>
       resetUserPassword: (workerId: number) => Promise<{ success: boolean; message?: string }>
       recordAttendance: (payload: AttendanceInput) => Promise<{ attendanceId: number }>
+      fetchAuditLogs: (payload: FetchAuditLogsInput) => Promise<FetchAuditLogsResult>
     }
   }
 }

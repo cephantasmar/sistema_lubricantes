@@ -13,7 +13,7 @@ import {
   getSalesReport,
 } from '../modules/store'
 import { changePassword, login } from '../modules/auth'
-import { resetUserPassword, saveRole, saveWorker } from '../modules/admin'
+import { fetchAuditLogs, resetUserPassword, saveRole, saveWorker } from '../modules/admin'
 
 let handlersRegistered = false
 
@@ -86,6 +86,10 @@ export function registerSystemIpc(database: Database.Database) {
 
   ipcMain.handle('auth:change-password', (_event, payload) => {
     return changePassword(database, payload.userId, payload.newPasswordPlain)
+  })
+
+  ipcMain.handle('admin:fetch-audit-logs', (_event, payload) => {
+    return fetchAuditLogs(database, payload)
   })
 
 }
