@@ -3,6 +3,8 @@ import type {
   AttendanceFormInput,
   AttendanceRow,
   BootstrapData,
+  ClientFormInput,
+  ClientRow,
   InventoryAuditInput,
   InventoryAuditResult,
   InventoryAuditResultItem,
@@ -209,7 +211,7 @@ export function getReferenceData(database: Database.Database, workerScopeId?: nu
     descripcion: string | null
   }>
 
-  const clientes = database.prepare("SELECT id_cliente AS id, nombre, COALESCE('Doc: ' || documento, '') AS descripcion FROM clientes ORDER BY nombre ASC").all() as Array<{
+  const clientes = database.prepare("SELECT id_cliente AS id, nombre || CASE WHEN documento IS NOT NULL AND documento <> '' THEN ' · CI ' || documento ELSE '' END AS nombre, telefono AS descripcion FROM clientes ORDER BY nombre ASC").all() as Array<{
     id: number
     nombre: string
     descripcion: string | null
@@ -303,7 +305,10 @@ export function listMovements(database: Database.Database): MovementRow[] {
     .all() as MovementRow[]
 }
 
-export function listSales(database: Database.Database): SaleRow[] {
+export function listSales(database: Database.Database, sellerScopeId?: number | null): SaleRow[] {
+  const sellerFilter = typeof sellerScopeId === 'number' ? 'WHERE v.id_vendedor = ?' : ''
+  const params = typeof sellerScopeId === 'number' ? [sellerScopeId] : []
+
   return database
     .prepare(
       `
@@ -311,6 +316,7 @@ export function listSales(database: Database.Database): SaleRow[] {
         v.id_venta,
         v.numero_factura,
         v.fecha_venta,
+        COALESCE(c.nombre, 'Consumidor final') AS cliente_nombre,
         COALESCE(det.productos_diferentes, 0) AS productos_diferentes,
         COALESCE(det.cantidad_total, 0) AS cantidad_total,
         v.subtotal,
@@ -320,6 +326,7 @@ export function listSales(database: Database.Database): SaleRow[] {
         mo.codigo || COALESCE(' ' || mo.simbolo, '') AS moneda,
         v.estado
       FROM ventas v
+      LEFT JOIN clientes c ON c.id_cliente = v.id_cliente
       LEFT JOIN (
         SELECT
           id_venta,
@@ -337,11 +344,73 @@ export function listSales(database: Database.Database): SaleRow[] {
         GROUP BY pv.id_venta
       ) pay ON pay.id_venta = v.id_venta
       INNER JOIN monedas mo ON mo.id_moneda = v.id_moneda
+      ${sellerFilter}
       ORDER BY v.fecha_venta DESC, v.id_venta DESC
       LIMIT 50
     `,
     )
-    .all() as SaleRow[]
+    .all(...params) as SaleRow[]
+}
+
+export function saveClient(database: Database.Database, input: ClientFormInput) {
+  requirePermission(database, 'REGISTRAR_VENTAS')
+
+  const nombre = normalizeText(input.nombre)
+  const documento = normalizeText(input.documento)
+  const telefono = normalizeText(input.telefono)
+  const email = normalizeText(input.email)?.toLowerCase() ?? null
+  const direccion = normalizeText(input.direccion)
+
+  assertRequiredText(nombre, 'El nombre o apellido')
+  assertRequiredText(documento, 'El CI')
+
+  if (nombre!.length > 150) {
+    throw new Error('El nombre del cliente no puede superar 150 caracteres.')
+  }
+  if (documento!.length < 4 || documento!.length > 50) {
+    throw new Error('El CI debe tener entre 4 y 50 caracteres.')
+  }
+  if (telefono && telefono.length > 30) {
+    throw new Error('El telefono no puede superar 30 caracteres.')
+  }
+  if (email && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 120)) {
+    throw new Error('Ingresa un correo electronico valido.')
+  }
+  if (direccion && direccion.length > 255) {
+    throw new Error('La direccion no puede superar 255 caracteres.')
+  }
+
+  const clientId = Number(input.id_cliente ?? 0)
+  const existing = database
+    .prepare('SELECT id_cliente FROM clientes WHERE LOWER(TRIM(documento)) = LOWER(TRIM(?)) AND id_cliente <> ?')
+    .get(documento, clientId) as { id_cliente: number } | undefined
+
+  if (existing) {
+    throw new Error('Ya existe un cliente registrado con ese CI.')
+  }
+
+  if (clientId > 0) {
+    const client = database.prepare('SELECT id_cliente FROM clientes WHERE id_cliente = ?').get(clientId)
+    if (!client) {
+      throw new Error('El cliente que intentas editar ya no existe.')
+    }
+
+    database.prepare(`
+      UPDATE clientes
+      SET nombre = ?, documento = ?, telefono = ?, direccion = ?, email = ?
+      WHERE id_cliente = ?
+    `).run(nombre, documento, telefono, direccion, email, clientId)
+
+    return { clientId }
+  }
+
+  const newClientId = getNextId(database, 'clientes', 'id_cliente')
+  database.prepare(`
+    INSERT INTO clientes (id_cliente, nombre, documento, telefono, direccion, email, creado_en)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(newClientId, nombre, documento, telefono, direccion, email, nowSql())
+
+  return { clientId: newClientId }
 }
 
 export function listAttendances(database: Database.Database, workerScopeId?: number | null): AttendanceRow[] {
@@ -495,6 +564,7 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
   const access = getCurrentUserAccess(database)
   const canManageRoles = hasPermission(database, 'GESTIONAR_ROLES')
   const canManageWorkers = hasPermission(database, 'GESTIONAR_TRABAJADORES')
+  const canManageShifts = hasPermission(database, 'GESTIONAR_TURNOS')
   const canAccessInventoryData =
     hasPermission(database, 'VER_INVENTARIO') ||
     hasPermission(database, 'REGISTRAR_MOVIMIENTOS') ||
@@ -505,7 +575,27 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
 
   const products = canAccessInventoryData ? listProducts(database) : []
   const movements = hasPermission(database, 'VER_MOVIMIENTOS') ? listMovements(database) : []
-  const sales = hasPermission(database, 'VER_VENTAS') ? listSales(database) : []
+  const canViewAllSales = access.isAdminLike || access.permissionNames.includes('VER_VENTAS')
+  const canAccessSales = canViewAllSales || access.permissionNames.includes('REGISTRAR_VENTAS')
+  const sales = canAccessSales
+    ? listSales(database, canViewAllSales ? null : getCurrentWorkerId() ?? -1)
+    : []
+  const salesMetricFilter = canViewAllSales ? '' : 'WHERE id_vendedor = ?'
+  const salesMetricParams = canViewAllSales ? [] : [getCurrentWorkerId() ?? -1]
+  const salesMetrics = canAccessSales
+    ? (database.prepare(`
+        SELECT COUNT(*) AS total_sales, COALESCE(SUM(total), 0) AS total_amount
+        FROM ventas
+        ${salesMetricFilter}
+      `).get(...salesMetricParams) as { total_sales: number; total_amount: number })
+    : { total_sales: 0, total_amount: 0 }
+  const clients = hasPermission(database, 'REGISTRAR_VENTAS')
+    ? (database.prepare(`
+        SELECT id_cliente, nombre, COALESCE(documento, '') AS documento, telefono, email, direccion, creado_en
+        FROM clientes
+        ORDER BY nombre ASC, id_cliente ASC
+      `).all() as ClientRow[])
+    : []
   const attendances = canAccessAttendanceData ? listAttendances(database, attendanceWorkerScope) : []
   const workHoursSummary = canAccessAttendanceData && access.canViewAllAttendance ? listWorkHoursSummary(database) : []
   const shiftHistory = canAccessAttendanceData ? listShiftHistory(database, attendanceWorkerScope) : []
@@ -540,6 +630,26 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
   const permissions = canManageRoles
     ? (database.prepare('SELECT id_permiso, nombre, descripcion, modulo, creado_en FROM permisos ORDER BY modulo ASC, nombre ASC').all() as PermissionRow[])
     : []
+  const shifts = canManageShifts
+    ? (database
+        .prepare(`
+          SELECT
+            tu.id_turno,
+            tu.nombre,
+            tu.hora_inicio,
+            tu.hora_fin,
+            tu.descripcion,
+            tu.estado,
+            (
+              (SELECT COUNT(*) FROM asistencias a WHERE a.id_turno = tu.id_turno) +
+              (SELECT COUNT(*) FROM historial_turnos ht WHERE ht.id_turno = tu.id_turno) +
+              (SELECT COUNT(*) FROM ventas v WHERE v.id_turno = tu.id_turno)
+            ) AS registros_asociados
+          FROM turnos tu
+          ORDER BY tu.hora_inicio ASC, tu.nombre ASC
+        `)
+        .all() as ShiftRow[])
+    : []
 
   const totalStock = products.reduce((sum, product) => sum + toNumber(product.stock_actual), 0)
   const lowStockProducts = products.filter((product) => toNumber(product.stock_actual) <= toNumber(product.stock_minimo)).length
@@ -551,16 +661,19 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
       totalStock,
       lowStockProducts,
       totalMovements: movements.length,
-      totalSales: sales.length,
+      totalSales: Number(salesMetrics.total_sales),
+      totalSalesAmount: Number(salesMetrics.total_amount),
       activeAttendances: attendances.filter((attendance) => attendance.estado === 'EN_TURNO').length,
     },
     products,
     movements,
     sales,
+    clients,
     attendances,
     workHoursSummary,
     shiftHistory,
     shiftRotationSummary,
+    shifts,
     roles,
     workers,
     auditLogs,
@@ -870,17 +983,31 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
       throw new Error('El vendedor especificado no existe.')
     }
 
+    const access = getCurrentUserAccess(database)
+    const currentWorkerId = getCurrentWorkerId()
+    if (!access.isAdminLike && payload.id_vendedor !== currentWorkerId) {
+      throw new Error('Solo puedes registrar ventas a nombre de tu propio usuario.')
+    }
+
+    const activeAttendance = database.prepare(`
+      SELECT a.id_turno
+      FROM asistencias a
+      INNER JOIN turnos t ON t.id_turno = a.id_turno
+      WHERE a.id_trabajador = ? AND a.hora_salida IS NULL AND t.estado = 1
+      ORDER BY a.hora_entrada DESC, a.id_asistencia DESC
+      LIMIT 1
+    `).get(payload.id_vendedor) as { id_turno: number } | undefined
+
+    if (!activeAttendance && !access.isAdminLike) {
+      throw new Error('El vendedor debe registrar su entrada antes de realizar una venta.')
+    }
+
+    const saleShiftId = activeAttendance ? Number(activeAttendance.id_turno) : null
+
     if (payload.id_cliente !== null) {
       const cliente = database.prepare('SELECT id_cliente FROM clientes WHERE id_cliente = ?').get(payload.id_cliente)
       if (!cliente) {
         throw new Error('El cliente especificado no existe.')
-      }
-    }
-
-    if (payload.id_turno !== null) {
-      const turno = database.prepare('SELECT id_turno FROM turnos WHERE id_turno = ?').get(payload.id_turno)
-      if (!turno) {
-        throw new Error('El turno especificado no existe.')
       }
     }
 
@@ -1035,7 +1162,7 @@ export function createSale(database: Database.Database, input: SaleFormInput) {
         timestamp,
         payload.id_cliente,
         payload.id_vendedor,
-        payload.id_turno,
+        saleShiftId,
         subtotal,
         discountTotal,
         total,
@@ -1123,6 +1250,7 @@ export function getSaleDetail(database: Database.Database, saleId: number): Sale
       `
       SELECT
         v.id_venta,
+        v.id_vendedor,
         v.numero_factura,
         v.fecha_venta,
         v.subtotal,
@@ -1133,6 +1261,8 @@ export function getSaleDetail(database: Database.Database, saleId: number): Sale
         v.estado,
         mo.codigo AS moneda_codigo,
         c.nombre AS cliente_nombre,
+        c.documento AS cliente_documento,
+        c.telefono AS cliente_telefono,
         t.nombres || ' ' || t.apellidos AS vendedor_nombre,
         tu.nombre AS turno_nombre
       FROM ventas v
@@ -1146,6 +1276,7 @@ export function getSaleDetail(database: Database.Database, saleId: number): Sale
     .get(saleId) as
     | {
         id_venta: number
+        id_vendedor: number
         numero_factura: string
         fecha_venta: string
         subtotal: number
@@ -1156,6 +1287,8 @@ export function getSaleDetail(database: Database.Database, saleId: number): Sale
         estado: string
         moneda_codigo: string
         cliente_nombre: string | null
+        cliente_documento: string | null
+        cliente_telefono: string | null
         vendedor_nombre: string
         turno_nombre: string | null
       }
@@ -1163,6 +1296,12 @@ export function getSaleDetail(database: Database.Database, saleId: number): Sale
 
   if (!sale) {
     throw new Error('La venta solicitada no existe.')
+  }
+
+  const access = getCurrentUserAccess(database)
+  const canViewAllSales = access.isAdminLike || access.permissionNames.includes('VER_VENTAS')
+  if (!canViewAllSales && sale.id_vendedor !== getCurrentWorkerId()) {
+    throw new Error('No tienes permiso para consultar esta venta.')
   }
 
   const detalles = database
@@ -1210,6 +1349,8 @@ export function getSaleDetail(database: Database.Database, saleId: number): Sale
     numero_factura: sale.numero_factura,
     fecha_venta: sale.fecha_venta,
     cliente_nombre: sale.cliente_nombre,
+    cliente_documento: sale.cliente_documento,
+    cliente_telefono: sale.cliente_telefono,
     vendedor_nombre: sale.vendedor_nombre,
     turno_nombre: sale.turno_nombre,
     subtotal: Number(sale.subtotal),
@@ -1366,6 +1507,11 @@ function getOpenAttendance(database: Database.Database, workerId: number) {
 }
 
 export function getSalesReport(database: Database.Database, input: SalesReportInput): SalesReportData {
+  const access = getCurrentUserAccess(database)
+  if (!access.isAdminLike) {
+    throw new Error('No tienes permiso para consultar reportes administrativos.')
+  }
+
   const { startDate, endDate } = input
 
   // 1. Profit report (SCRUM-16)

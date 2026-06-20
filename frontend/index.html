@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="es">
+<<<<<<< HEAD
 
 <head>
   <meta charset="UTF-8" />
@@ -13,6 +14,43 @@
       <div class="">
         <p class="brand-block__kicker">SISTEMA LUBRICANTES</p>
         <h2>Iniciar Sesión</h2>
+=======
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventario de Aceites</title>
+    <script>
+      (() => {
+        try {
+          if (localStorage.getItem('lubricantes-theme') === 'dark') {
+            document.documentElement.dataset.theme = 'dark'
+          }
+        } catch {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="login-overlay" class="login-overlay">
+      <div class="login-card">
+        <div class="brand-block">
+          <p class="brand-block__kicker">SISTEMA LUBRICANTES</p>
+          <h2>Iniciar Sesión</h2>
+        </div>
+        <form id="login-form" class="form-grid" style="margin-top: 1.5rem;">
+          <label class="field field--wide">
+            <span>Usuario</span>
+            <input name="username" type="text" required autofocus />
+          </label>
+          <label class="field field--wide">
+            <span>Contraseña</span>
+            <input name="password" type="password" required />
+          </label>
+          <p class="module-status" id="login-status"></p>
+          <div class="form-actions field--wide">
+            <button class="button button--primary" type="submit" style="width: 100%;">Ingresar</button>
+          </div>
+        </form>
+>>>>>>> origin/SPRINT3
       </div>
       <form id="login-form" class="form-grid" style="margin-top: 1.5rem;">
         <label class="field field--wide">
@@ -29,6 +67,7 @@
         </div>
       </form>
     </div>
+<<<<<<< HEAD
   </div>
   <div class="shell" id="main-app" style="display: none;">
     <div class="shell-body">
@@ -68,6 +107,39 @@
               <button class="tabs__button tabs__button--sub" type="button" data-tab="admin-auditoria" role="tab"
                 aria-selected="false" style="padding-left: 2.5rem;"><i class="ti ti-file-analytics"></i>
                 Auditoría</button>
+=======
+    <div class="shell" id="main-app" style="display: none;">
+      <div class="shell-body">
+        <aside class="sidebar" id="main-sidebar">
+          <div class="sidebar-header">
+            <h3>Menú</h3>
+            <button class="button button--ghost button--small" id="sidebar-toggle" title="Retraer menú"><i class="ti ti-menu-2"></i></button>
+          </div>
+          <nav class="tabs sidebar-tabs" role="tablist" aria-label="Secciones principales">
+            <button class="tabs__button is-active" type="button" data-tab="home" role="tab" aria-selected="true"><i class="ti ti-home"></i> Home</button>
+            <button class="tabs__button" type="button" data-tab="dashboard" role="tab" aria-selected="false"><i class="ti ti-layout-dashboard"></i> Dashboard</button>
+            <button class="tabs__button" type="button" data-tab="inventario" role="tab" aria-selected="false"><i class="ti ti-box"></i> Inventario</button>
+            <button class="tabs__button" type="button" data-tab="movimientos" role="tab" aria-selected="false"><i class="ti ti-arrows-exchange"></i> Movimientos</button>
+            <button class="tabs__button" type="button" data-tab="ventas" role="tab" aria-selected="false"><i class="ti ti-receipt"></i> Ventas</button>
+            <button class="tabs__button" type="button" data-tab="turnos" role="tab" aria-selected="false"><i class="ti ti-clock"></i> Turnos</button>
+            <button class="tabs__button" type="button" data-tab="administracion" role="tab" aria-selected="false"><i class="ti ti-settings"></i> Administración</button>
+            <button class="tabs__button" type="button" data-tab="reportes" role="tab" aria-selected="false"><i class="ti ti-chart-bar"></i> Reportes</button>
+          </nav>
+          <div class="sidebar-footer">
+            <button id="theme-toggle" type="button" aria-pressed="false">
+              <i class="ti ti-moon"></i> <span>Modo oscuro</span>
+            </button>
+            <button id="logout-btn"><i class="ti ti-logout"></i> <span>Cerrar sesión</span></button>
+          </div>
+        </aside>
+
+        <main class="workspace">
+          <section class="tab-panel landing-panel is-active" data-panel="home" role="tabpanel" aria-label="Inicio del sistema">
+            <div class="landing-panel__content">
+              <span class="module-kicker">Inicio</span>
+              <h2 id="landing-welcome">Bienvenido</h2>
+              <p id="landing-message">Que tengas una excelente jornada de trabajo.</p>
+>>>>>>> origin/SPRINT3
             </div>
           </div>
           <button class="tabs__button" type="button" data-tab="reportes" role="tab" aria-selected="false"><i
@@ -78,6 +150,7 @@
         </div>
       </aside>
 
+<<<<<<< HEAD
       <main class="workspace">
         <section class="landing-panel" aria-label="Bienvenida al sistema">
           <div class="landing-panel__content">
@@ -112,8 +185,67 @@
                 <p class="brand-block__kicker">Gestión comercial</p>
                 <h1>Sistema de Inventario y Ventas</h1>
                 <p>Tienda de aceites y lubricantes</p>
+=======
+            <aside class="landing-clock" aria-label="Fecha y hora actual">
+              <span id="landing-date">Cargando fecha...</span>
+              <strong id="landing-clock">--:--</strong>
+              <small>Hora local del equipo</small>
+            </aside>
+
+            <section class="quick-actions-panel">
+              <div class="home-section-header">
+                <span class="module-kicker">Accesos directos</span>
+                <h3>¿Que deseas hacer hoy?</h3>
+              </div>
+              <div class="quick-actions-grid" id="home-quick-actions"></div>
+            </section>
+
+            <aside class="weather-card" aria-label="Clima local">
+              <div class="weather-card__header">
+                <div>
+                  <span>Clima</span>
+                  <small id="weather-location">Trinidad, Bolivia</small>
+                </div>
+                <button class="weather-refresh" id="weather-refresh" type="button" title="Actualizar clima">
+                  <i class="ti ti-refresh"></i>
+                </button>
+              </div>
+              <div class="weather-card__content" id="weather-content">
+                <i class="ti ti-cloud weather-card__icon"></i>
+                <div>
+                  <strong id="weather-temperature">--°</strong>
+                  <span id="weather-description">Cargando clima...</span>
+                  <small id="weather-details">Consultando las condiciones de Trinidad.</small>
+                </div>
+              </div>
+              <div class="weather-card__metrics">
+                <div><span>Humedad</span><strong id="weather-humidity">--%</strong></div>
+                <div><span>Viento</span><strong id="weather-wind">-- km/h</strong></div>
+              </div>
+            </aside>
+
+            <aside class="home-info-card">
+              <i class="ti ti-user-circle"></i>
+              <div>
+                <span>Sesion actual</span>
+                <strong id="home-role-name">Usuario</strong>
+                <small>Las opciones disponibles dependen de los permisos de tu rol.</small>
+              </div>
+            </aside>
+          </section>
+
+          <div class="tab-panels">
+            <section class="session-welcome-banner" id="session-welcome-banner" aria-label="Mensaje de bienvenida" hidden>
+              <div class="welcome-banner">
+                <div class="brand-block">
+                  <p class="brand-block__kicker">Bienvenido</p>
+                  <h1>Sistema de Inventario y Ventas</h1>
+                  <p>Selecciona un módulo en la barra lateral para comenzar a trabajar.</p>
+                </div>
+>>>>>>> origin/SPRINT3
               </div>
 
+<<<<<<< HEAD
               <div class="topbar-widgets">
                 <section class="status-card">
                   <h2>Estado del sistema</h2>
@@ -132,8 +264,92 @@
                   <div class="info-list">
                     <div class="info-item"><span>Usuario</span><strong id="nav-user-name">...</strong></div>
                     <div class="info-item"><span>Rol</span><strong id="nav-user-role">...</strong></div>
+=======
+            <section class="tab-panel" data-panel="dashboard" role="tabpanel">
+              <header class="topbar" style="margin-bottom: 16px;">
+                <div class="brand-block dashboard-brand">
+                  <div class="dashboard-brand__icon" aria-hidden="true">
+                    <i class="ti ti-droplet"></i>
+                    <i class="ti ti-settings"></i>
+                  </div>
+                  <div class="dashboard-brand__content">
+                    <p class="brand-block__kicker"><i class="ti ti-sparkles"></i> Gestión comercial</p>
+                    <h1>Sistema de Inventario <span>y Ventas</span></h1>
+                    <p class="dashboard-brand__description">Control integral para tu tienda de aceites y lubricantes.</p>
+                    <div class="dashboard-brand__tags" aria-label="Funciones principales">
+                      <span><i class="ti ti-packages"></i> Inventario</span>
+                      <span><i class="ti ti-receipt-2"></i> Ventas</span>
+                      <span><i class="ti ti-engine"></i> Lubricantes</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="topbar-widgets">
+                  <section class="status-card">
+                    <h2><i class="ti ti-activity-heartbeat"></i> Estado del sistema</h2>
+                    <div id="app-info" class="info-list">
+                      <div class="info-item">Cargando información del sistema...</div>
+                    </div>
+                  </section>
+
+                  <section class="status-card">
+                    <h2><i class="ti ti-chart-donut-3"></i> Resumen rápido</h2>
+                    <div id="quick-stats" class="mini-stats"></div>
+                  </section>
+
+                  <section class="status-card">
+                    <h2><i class="ti ti-user-shield"></i> Mi Cuenta</h2>
+                    <div class="info-list">
+                      <div class="info-item"><span>Usuario</span><strong id="nav-user-name">...</strong></div>
+                      <div class="info-item"><span>Rol</span><strong id="nav-user-role">...</strong></div>
+                    </div>
+                  </section>
+                </div>
+              </header>
+
+              <div class="module-layout module-layout--inventory">
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Métricas</span>
+                      <h2>Estadísticas Globales</h2>
+                    </div>
+                    <button class="button button--ghost" id="dashboard-refresh" type="button"><i class="ti ti-refresh"></i> Actualizar</button>
+>>>>>>> origin/SPRINT3
                   </div>
                 </section>
+
+                <div class="dashboard-detail-grid">
+                  <section class="module-card dashboard-panel">
+                    <div class="module-card__header">
+                      <div><span class="module-kicker">Inventario</span><h2>Productos con stock bajo</h2></div>
+                      <span class="module-badge" id="dashboard-low-stock-count">0 productos</span>
+                    </div>
+                    <div id="dashboard-low-stock" class="dashboard-list"></div>
+                  </section>
+
+                  <section class="module-card dashboard-panel">
+                    <div class="module-card__header">
+                      <div><span class="module-kicker">Personal</span><h2>Trabajadores en turno</h2></div>
+                      <span class="module-badge" id="dashboard-active-count">0 activos</span>
+                    </div>
+                    <div id="dashboard-active-workers" class="dashboard-list"></div>
+                  </section>
+
+                  <section class="module-card dashboard-panel">
+                    <div class="module-card__header">
+                      <div><span class="module-kicker">Ventas</span><h2>Ventas recientes</h2></div>
+                    </div>
+                    <div id="dashboard-recent-sales" class="dashboard-list"></div>
+                  </section>
+
+                  <section class="module-card dashboard-panel">
+                    <div class="module-card__header">
+                      <div><span class="module-kicker">Inventario</span><h2>Movimientos recientes</h2></div>
+                    </div>
+                    <div id="dashboard-recent-movements" class="dashboard-list"></div>
+                  </section>
+                </div>
               </div>
             </header>
 
@@ -435,6 +651,7 @@
           </section>
 
           <section class="tab-panel" data-panel="ventas" role="tabpanel">
+<<<<<<< HEAD
             <div class="sales-layout">
               <section class="module-card sales-register">
                 <div class="module-card__header">
@@ -462,6 +679,18 @@
                       <span>Turno (Opcional)</span>
                       <select name="id_turno"></select>
                     </label>
+=======
+              <div class="sales-layout">
+                <section class="module-card sales-register">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Caja</span>
+                      <h2>Registrar venta</h2>
+                    </div>
+                    <button class="button button--ghost" id="client-form-toggle" type="button">
+                      <i class="ti ti-user-plus"></i> Nuevo cliente
+                    </button>
+>>>>>>> origin/SPRINT3
                   </div>
 
                   <div class="sale-product-search">
@@ -471,13 +700,213 @@
                         autocomplete="off" />
                     </label>
 
+<<<<<<< HEAD
                     <div class="product-results" id="sale-product-results"></div>
+=======
+                  <form id="client-form" class="client-quick-form" hidden>
+                    <input name="id_cliente" type="hidden" />
+                    <div class="client-quick-form__header">
+                      <div>
+                        <span class="module-kicker">Datos del comprador</span>
+                        <h3 id="client-form-title">Registrar cliente</h3>
+                      </div>
+                      <button class="button button--small button--ghost" id="client-form-close" type="button" title="Cerrar">
+                        <i class="ti ti-x"></i>
+                      </button>
+                    </div>
+                    <p class="module-status" id="client-status"></p>
+                    <div class="form-grid">
+                      <label class="field">
+                        <span>Nombre o apellido *</span>
+                        <input name="nombre" type="text" maxlength="150" placeholder="Ej. María Fernández" required />
+                      </label>
+                      <label class="field">
+                        <span>CI / Carnet *</span>
+                        <input name="documento" type="text" minlength="4" maxlength="50" placeholder="Ej. 12345678" required />
+                      </label>
+                      <label class="field">
+                        <span>Teléfono <small>* Opcional</small></span>
+                        <input name="telefono" type="tel" maxlength="30" placeholder="Ej. 70000000" />
+                      </label>
+                      <label class="field">
+                        <span>Correo electrónico <small>* Opcional</small></span>
+                        <input name="email" type="email" maxlength="120" placeholder="cliente@correo.com" />
+                      </label>
+                      <label class="field field--wide">
+                        <span>Dirección <small>* Opcional</small></span>
+                        <input name="direccion" type="text" maxlength="255" placeholder="Barrio, calle o referencia (opcional)" />
+                      </label>
+                    </div>
+                    <div class="form-actions">
+                      <button class="button button--ghost" id="client-form-cancel" type="button">Cancelar</button>
+                      <button class="button button--primary" type="submit"><i class="ti ti-device-floppy"></i> Guardar cliente</button>
+                    </div>
+                  </form>
+
+                  <form id="sale-form" class="sale-form">
+                    <div class="sale-header-fields form-grid">
+                      <div class="field client-picker">
+                        <span>Cliente</span>
+                        <div class="client-picker__search">
+                          <i class="ti ti-search"></i>
+                          <input id="client-search" type="search" placeholder="Buscar por CI o nombre" autocomplete="off" />
+                          <button class="client-search-button" id="client-search-btn" type="button" title="Buscar cliente" aria-label="Buscar cliente">
+                            <i class="ti ti-search"></i>
+                          </button>
+                          <button class="button button--small button--ghost" id="client-edit-btn" type="button" disabled>
+                            <i class="ti ti-edit"></i> Editar cliente
+                          </button>
+                        </div>
+                        <select name="id_cliente"></select>
+                        <small id="client-search-status">Escribe el CI o nombre y presiona Enter o la lupa.</small>
+                      </div>
+
+                      <label class="field">
+                        <span>Vendedor</span>
+                        <select name="id_vendedor" required></select>
+                        <small id="sale-shift-status">El turno se toma automáticamente de la jornada activa.</small>
+                      </label>
+
+                      <select name="id_turno" hidden aria-hidden="true" tabindex="-1"></select>
+                    </div>
+
+                    <div class="sale-product-search">
+                      <label class="field">
+                        <span>Buscar producto</span>
+                        <input id="sale-product-search" type="search" placeholder="Codigo, barra, nombre o marca" autocomplete="off" />
+                      </label>
+
+                      <div class="product-results" id="sale-product-results"></div>
+                    </div>
+
+                    <div class="table-wrap cart-wrap">
+                      <table class="data-table cart-table" id="sale-cart-table">
+                        <thead>
+                          <tr>
+                            <th style="width: 50px; text-align: center;">#</th>
+                            <th>Producto</th>
+                            <th style="text-align: right;">Stock</th>
+                            <th style="text-align: right; width: 100px;">Cantidad</th>
+                            <th style="text-align: right;">Precio unitario</th>
+                            <th style="text-align: right; width: 100px;">Descuento</th>
+                            <th style="text-align: right;">Subtotal</th>
+                            <th style="text-align: right;">Total linea</th>
+                            <th style="text-align: center; width: 90px;">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody></tbody>
+                      </table>
+                    </div>
+
+                    <div class="sale-checkout">
+                      <div class="payment-adder card-subgroup">
+                        <h3>Agregar Pago</h3>
+                        <div class="form-grid">
+                          <label class="field">
+                            <span>Método de pago</span>
+                            <select id="payment-method-select"></select>
+                          </label>
+                          <label class="field">
+                            <span>Moneda</span>
+                            <select id="payment-currency-select"></select>
+                          </label>
+                          <label class="field">
+                            <span>Monto</span>
+                            <input id="payment-amount-input" type="number" step="0.01" min="0.01" placeholder="0.00" />
+                          </label>
+                          <label class="field">
+                            <span>Referencia <small>* Opcional</small></span>
+                            <input id="payment-ref-input" type="text" placeholder="Efectivo / QR" />
+                          </label>
+                          <div class="form-actions field--wide">
+                            <button type="button" class="button button--ghost" id="payment-add-btn">Agregar Pago</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="payments-list-container card-subgroup">
+                        <h3>Pagos Registrados</h3>
+                        <div class="table-wrap">
+                          <table class="data-table" id="sale-payments-table">
+                            <thead>
+                              <tr>
+                                <th>Método</th>
+                                <th>Moneda</th>
+                                <th>Monto</th>
+                                <th>Referencia</th>
+                                <th>Acción</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr><td colspan="5" class="empty-state">No se han registrado pagos.</td></tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div class="form-grid">
+                        <label class="field">
+                          <span>Descuento Total (Manual)</span>
+                          <input name="descuento_total" type="number" step="0.01" min="0" value="0" />
+                        </label>
+
+                        <label class="field">
+                          <span>Moneda de la Venta</span>
+                          <select name="id_moneda" required></select>
+                        </label>
+
+                        <label class="field">
+                          <span>Tasa Cambio Aplicada</span>
+                          <input name="tasa_cambio_aplicada" type="number" step="0.0001" min="0.0001" value="1.0000" readonly />
+                        </label>
+
+                        <label class="field">
+                          <span>Total Venta</span>
+                          <output id="sale-total-output">0.00</output>
+                        </label>
+
+                        <div class="payment-metrics field--wide">
+                          <div class="metric-badge"><span>Total Pagado</span><strong id="sale-paid-output">0.00</strong></div>
+                          <div class="metric-badge"><span>Saldo Pendiente</span><strong id="sale-pending-output">0.00</strong></div>
+                          <div class="metric-badge"><span>Cambio (Vuelto)</span><strong id="sale-change-output">0.00</strong></div>
+                        </div>
+
+                        <label class="field field--wide">
+                          <span>Observación</span>
+                          <textarea name="observacion" rows="2" placeholder="Nota opcional para la venta"></textarea>
+                        </label>
+                      </div>
+
+                      <div class="sale-summary" aria-label="Resumen de venta">
+                        <div><span>Productos</span><strong id="sale-summary-products">0</strong></div>
+                        <div><span>Unidades</span><strong id="sale-summary-units">0.00</strong></div>
+                        <div><span>Subtotal</span><strong id="sale-summary-subtotal">0.00</strong></div>
+                        <div><span>Descuento</span><strong id="sale-summary-discount">0.00</strong></div>
+                      </div>
+
+                      <div class="form-actions">
+                        <button class="button button--ghost" id="sale-cart-clear" type="button">Limpiar</button>
+                        <button class="button button--primary" type="submit">Confirmar venta</button>
+                      </div>
+                    </div>
+                  </form>
+                </section>
+
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Ventas</span>
+                      <h2>Últimas ventas</h2>
+                    </div>
+                    <span class="module-badge" id="sale-count">0 ventas</span>
+>>>>>>> origin/SPRINT3
                   </div>
 
                   <div class="table-wrap cart-wrap">
                     <table class="data-table cart-table" id="sale-cart-table">
                       <thead>
                         <tr>
+<<<<<<< HEAD
                           <th style="width: 50px; text-align: center;">#</th>
                           <th>Producto</th>
                           <th style="text-align: right;">Stock</th>
@@ -487,6 +916,17 @@
                           <th style="text-align: right;">Subtotal</th>
                           <th style="text-align: right;">Total linea</th>
                           <th style="text-align: center; width: 90px;">Acciones</th>
+=======
+                          <th>Factura</th>
+                          <th>Fecha</th>
+                          <th>Cliente</th>
+                          <th>Productos</th>
+                          <th>Unidades</th>
+                          <th>Total</th>
+                          <th>Pago</th>
+                          <th>Estado</th>
+                          <th>Acciones</th>
+>>>>>>> origin/SPRINT3
                         </tr>
                       </thead>
                       <tbody></tbody>
@@ -947,6 +1387,7 @@
             </div>
           </section>
 
+<<<<<<< HEAD
           <section class="tab-panel" data-panel="asistencias" role="tabpanel">
             <div class="module-layout">
               <section class="module-card">
@@ -976,6 +1417,17 @@
                   <div>
                     <span class="module-kicker">Seguridad</span>
                     <h2>Listado de Roles</h2>
+=======
+          <section class="tab-panel" data-panel="administracion" role="tabpanel">
+              <div class="module-layout">
+                <section class="module-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Seguridad</span>
+                      <h2>Gestión de Roles</h2>
+                    </div>
+                    <button class="button button--ghost" id="role-form-reset" type="button">Nuevo</button>
+>>>>>>> origin/SPRINT3
                   </div>
                   <button class="button button--primary" id="btn-new-role" type="button">Nuevo Rol</button>
                 </div>
@@ -1033,6 +1485,7 @@
             </div>
           </section>
 
+<<<<<<< HEAD
           <section class="tab-panel" data-panel="admin-trabajadores" role="tabpanel">
             <div id="workers-list-view">
               <section class="module-card">
@@ -1040,6 +1493,74 @@
                   <div>
                     <span class="module-kicker">Personal</span>
                     <h2>Listado de Trabajadores</h2>
+=======
+                <section class="module-card module-card--wide" id="shift-management-card">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Horarios por temporada</span>
+                      <h2>Gestion de turnos</h2>
+                    </div>
+                    <button class="button button--ghost" id="shift-form-reset" type="button">Nuevo turno</button>
+                  </div>
+
+                  <p class="module-status" id="shift-status"></p>
+
+                  <form id="shift-form" class="form-grid">
+                    <input type="hidden" name="id_turno" />
+
+                    <label class="field field--wide">
+                      <span>Nombre del turno</span>
+                      <input name="nombre" type="text" placeholder="Ej. Horario de verano" maxlength="50" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Hora de inicio</span>
+                      <input name="hora_inicio" type="time" required />
+                    </label>
+
+                    <label class="field">
+                      <span>Hora de fin</span>
+                      <input name="hora_fin" type="time" required />
+                    </label>
+
+                    <label class="field field--wide">
+                      <span>Descripcion</span>
+                      <textarea name="descripcion" rows="2" maxlength="255" placeholder="Temporada o detalle del horario"></textarea>
+                    </label>
+
+                    <label class="field field--checkbox">
+                      <input name="estado" type="checkbox" checked />
+                      <span>Turno disponible</span>
+                    </label>
+
+                    <div class="form-actions field--wide">
+                      <button class="button button--primary" type="submit">Guardar turno</button>
+                    </div>
+                  </form>
+
+                  <div class="table-wrap" style="margin-top: 1rem;">
+                    <table class="data-table" id="shifts-table">
+                      <thead>
+                        <tr>
+                          <th>Turno</th>
+                          <th>Horario</th>
+                          <th>Descripcion</th>
+                          <th>Estado</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section class="module-card field--wide" style="grid-column: 1 / -1;">
+                  <div class="module-card__header">
+                    <div>
+                      <span class="module-kicker">Auditoría</span>
+                      <h2>Log de Actividades</h2>
+                    </div>
+>>>>>>> origin/SPRINT3
                   </div>
                   <button class="button button--primary" id="btn-new-worker" type="button">Nuevo Trabajador</button>
                 </div>

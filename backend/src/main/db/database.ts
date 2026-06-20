@@ -42,7 +42,8 @@ function seedDatabase(databaseInstance: Database.Database) {
   const seedStatements = [
     "INSERT OR IGNORE INTO marcas (id_marca, nombre, descripcion, estado) VALUES (1, 'Sin marca', 'Marca base inicial', 1)",
     "INSERT OR IGNORE INTO categorias_producto (id_categoria, nombre, descripcion) VALUES (1, 'General', 'Categoría base inicial')",
-    "INSERT OR IGNORE INTO monedas (id_moneda, codigo, nombre, simbolo) VALUES (1, 'USD', 'Dólar estadounidense', '$')",
+    "INSERT OR IGNORE INTO monedas (id_moneda, codigo, nombre, simbolo) VALUES (1, 'BOB', 'Boliviano', 'Bs')",
+    "UPDATE monedas SET codigo = 'BOB', nombre = 'Boliviano', simbolo = 'Bs' WHERE id_moneda = 1",
     "INSERT OR IGNORE INTO metodos_pago (id_metodo, nombre, estado) VALUES (1, 'Efectivo', 1)",
     "INSERT OR IGNORE INTO metodos_pago (id_metodo, nombre, estado) VALUES (2, 'Tarjeta', 1)",
     "INSERT OR IGNORE INTO metodos_pago (id_metodo, nombre, estado) VALUES (3, 'Transferencia', 1)",
@@ -57,8 +58,12 @@ function seedDatabase(databaseInstance: Database.Database) {
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (8, 'REGISTRAR_ASISTENCIAS', 'Marcar entrada y salida', 'ASISTENCIAS', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (9, 'GESTIONAR_ROLES', 'Crear y asignar roles (RBAC)', 'ADMINISTRACION', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (10, 'GESTIONAR_TRABAJADORES', 'Añadir y editar personal', 'ADMINISTRACION', '${now}')`,
+<<<<<<< HEAD
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (11, 'VER_REPORTES', 'Ver reportes y métricas', 'REPORTES', '${now}')`,
     `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (12, 'GENERAR_REPORTES', 'Exportar reportes en CSV', 'REPORTES', '${now}')`,
+=======
+    `INSERT OR IGNORE INTO permisos (id_permiso, nombre, descripcion, modulo, creado_en) VALUES (11, 'GESTIONAR_TURNOS', 'Crear y editar horarios de trabajo', 'ADMINISTRACION', '${now}')`,
+>>>>>>> origin/SPRINT3
     `INSERT OR IGNORE INTO rol_permiso (id_rol, id_permiso) SELECT 1, id_permiso FROM permisos`,
     "INSERT OR IGNORE INTO turnos (id_turno, nombre, hora_inicio, hora_fin, descripcion, estado) VALUES (1, 'Mañana', '08:00', '12:00', 'Turno de apertura', 1)",
     "UPDATE turnos SET nombre = 'Mañana' WHERE id_turno = 1",
@@ -111,6 +116,7 @@ function seedDatabase(databaseInstance: Database.Database) {
     ) VALUES (?, ?, 'ENTRADA', ?, ?, 'Stock inicial de prueba', ?, ?, 1, ?)
   `)
 
+<<<<<<< HEAD
   const getProductStock = databaseInstance.prepare(`
     SELECT COALESCE(SUM(
       CASE
@@ -130,6 +136,8 @@ function seedDatabase(databaseInstance: Database.Database) {
     ) VALUES (?, ?, 'AJUSTE_POS', ?, ?, 'Reposicion de stock demo', ?, ?, 1, ?)
   `)
 
+=======
+>>>>>>> origin/SPRINT3
   databaseInstance.transaction(() => {
     seedStatements.forEach((statement) => {
       databaseInstance.prepare(statement).run()
@@ -151,20 +159,6 @@ function seedDatabase(databaseInstance: Database.Database) {
       )
 
       insertMovement.run(5000 + index + 1, product.id, product.stockInicial, product.costo, referencia, referencia, now)
-
-      const currentStock = Number((getProductStock.get(product.id) as { stock_actual: number } | undefined)?.stock_actual ?? 0)
-      if (currentStock < product.stockInicial) {
-        const missingStock = Number((product.stockInicial - currentStock).toFixed(2))
-        insertStockAdjustment.run(
-          6000 + index + 1,
-          product.id,
-          missingStock,
-          product.costo,
-          `SEED-TOPUP-${product.codigo}`,
-          `Ajuste automatico de stock demo hasta ${product.stockInicial}`,
-          now,
-        )
-      }
     })
   })()
 }

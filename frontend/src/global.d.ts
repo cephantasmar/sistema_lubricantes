@@ -4,6 +4,7 @@ import type {
   AppInfo,
   AttendanceFormInput,
   BootstrapData,
+  ClientFormInput,
   InventoryAuditInput,
   InventoryAuditResult,
   MovementFormInput,
@@ -13,6 +14,7 @@ import type {
   AuthInput,
   AuthResult,
   RoleFormInput,
+  ShiftFormInput,
   WorkerFormInput,
   AttendanceInput,
   SalesReportInput,
@@ -30,6 +32,7 @@ declare global {
       createMovement: (payload: MovementFormInput) => Promise<{ movementId: number }>
       closeInventory: (payload: InventoryAuditInput) => Promise<InventoryAuditResult>
       createSale: (payload: SaleFormInput) => Promise<{ saleId: number }>
+      saveClient: (payload: ClientFormInput) => Promise<{ clientId: number }>
       getSaleDetail: (saleId: number) => Promise<SaleFullDetail>
       getSalesReport: (payload: SalesReportInput) => Promise<SalesReportData>
       registerAttendanceEntry: (payload: AttendanceFormInput) => Promise<{ attendanceId: number }>
@@ -38,7 +41,13 @@ declare global {
       changePassword: (payload: { userId: number; newPasswordPlain: string }) => Promise<{ success: boolean; message?: string }>
       saveRole: (payload: RoleFormInput) => Promise<{ roleId: number }>
       saveWorker: (payload: WorkerFormInput) => Promise<{ workerId: number }>
+<<<<<<< HEAD
       resetUserPassword: (workerId: number) => Promise<{ success: boolean; message?: string }>
+=======
+      saveShift: (payload: ShiftFormInput) => Promise<{ shiftId: number }>
+      deleteShift: (shiftId: number) => Promise<{ deleted: boolean }>
+      setShiftState: (shiftId: number, enabled: boolean) => Promise<{ shiftId: number; enabled: boolean }>
+>>>>>>> origin/SPRINT3
       recordAttendance: (payload: AttendanceInput) => Promise<{ attendanceId: number }>
       fetchAuditLogs: (payload: FetchAuditLogsInput) => Promise<FetchAuditLogsResult>
     }

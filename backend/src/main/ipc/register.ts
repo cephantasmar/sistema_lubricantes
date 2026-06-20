@@ -7,24 +7,27 @@ import {
   createSale,
   getBootstrapData,
   getSaleDetail,
+  saveClient,
   registerAttendanceEntry,
   registerAttendanceExit,
   saveProduct,
   getSalesReport,
 } from '../modules/store'
+<<<<<<< HEAD
 import { changePassword, login } from '../modules/auth'
 import { fetchAuditLogs, resetUserPassword, saveRole, saveWorker } from '../modules/admin'
+=======
+import { login } from '../modules/auth'
+import { deleteShift, saveRole, saveShift, saveWorker, setShiftState } from '../modules/admin'
+>>>>>>> origin/SPRINT3
 
-let handlersRegistered = false
+function registerHandler(channel: string, handler: Parameters<typeof ipcMain.handle>[1]) {
+  ipcMain.removeHandler(channel)
+  ipcMain.handle(channel, handler)
+}
 
 export function registerSystemIpc(database: Database.Database) {
-  if (handlersRegistered) {
-    return
-  }
-
-  handlersRegistered = true
-
-  ipcMain.handle('system:get-app-info', () => {
+  registerHandler('system:get-app-info', () => {
     return {
       appName: app.getName(),
       version: app.getVersion(),
@@ -32,54 +35,59 @@ export function registerSystemIpc(database: Database.Database) {
     }
   })
 
-  ipcMain.handle('app:get-bootstrap-data', () => {
+  registerHandler('app:get-bootstrap-data', () => {
     return getBootstrapData(database)
   })
 
-  ipcMain.handle('inventory:save-product', (_event, payload) => {
+  registerHandler('inventory:save-product', (_event, payload) => {
     return saveProduct(database, payload)
   })
 
-  ipcMain.handle('inventory:create-movement', (_event, payload) => {
+  registerHandler('inventory:create-movement', (_event, payload) => {
     return createMovement(database, payload)
   })
 
-  ipcMain.handle('inventory:close-inventory', (_event, payload) => {
+  registerHandler('inventory:close-inventory', (_event, payload) => {
     return closeInventory(database, payload)
   })
 
-  ipcMain.handle('sales:create-sale', (_event, payload) => {
+  registerHandler('sales:create-sale', (_event, payload) => {
     return createSale(database, payload)
   })
 
-  ipcMain.handle('sales:get-sale-detail', (_event, saleId) => {
+  registerHandler('sales:save-client', (_event, payload) => {
+    return saveClient(database, payload)
+  })
+
+  registerHandler('sales:get-sale-detail', (_event, saleId) => {
     return getSaleDetail(database, saleId)
   })
 
-  ipcMain.handle('sales:get-sales-report', (_event, payload) => {
+  registerHandler('sales:get-sales-report', (_event, payload) => {
     return getSalesReport(database, payload)
   })
 
-  ipcMain.handle('attendance:register-entry', (_event, payload) => {
+  registerHandler('attendance:register-entry', (_event, payload) => {
     return registerAttendanceEntry(database, payload)
   })
 
-  ipcMain.handle('attendance:register-exit', (_event, payload) => {
+  registerHandler('attendance:register-exit', (_event, payload) => {
     return registerAttendanceExit(database, payload)
   })
 
-  ipcMain.handle('auth:login', (_event, payload) => {
+  registerHandler('auth:login', (_event, payload) => {
     return login(database, payload)
   })
 
-  ipcMain.handle('admin:save-role', (_event, payload) => {
+  registerHandler('admin:save-role', (_event, payload) => {
     return saveRole(database, payload)
   })
 
-  ipcMain.handle('admin:save-worker', (_event, payload) => {
+  registerHandler('admin:save-worker', (_event, payload) => {
     return saveWorker(database, payload)
   })
 
+<<<<<<< HEAD
   ipcMain.handle('admin:reset-user-password', (_event, workerId) => {
     return resetUserPassword(database, workerId)
   })
@@ -90,6 +98,18 @@ export function registerSystemIpc(database: Database.Database) {
 
   ipcMain.handle('admin:fetch-audit-logs', (_event, payload) => {
     return fetchAuditLogs(database, payload)
+=======
+  registerHandler('admin:save-shift', (_event, payload) => {
+    return saveShift(database, payload)
+  })
+
+  registerHandler('admin:delete-shift', (_event, shiftId) => {
+    return deleteShift(database, shiftId)
+  })
+
+  registerHandler('admin:set-shift-state', (_event, shiftId, enabled) => {
+    return setShiftState(database, shiftId, enabled)
+>>>>>>> origin/SPRINT3
   })
 
 }
