@@ -89,6 +89,8 @@ export type WorkerRow = {
   estado: string
   creado_en: string
   id_rol?: number | null
+  username?: string | null
+  rol_nombre?: string | null
 }
 
 export type AuditLogRow = {

@@ -95,7 +95,7 @@ function resolveUserAccess(db: Database.Database, userId: number) {
   const roleNames = roles.map((role) => role.nombre)
   const permissionNames = permissions.map((permission) => permission.nombre)
   const normalizedRoles = roleNames.map(normalizeAccessName)
-  const isAdminLike = normalizedRoles.some((role) => role === 'admin' || role.includes('administrador') || role.includes('gerente'))
+  const isAdminLike = userId === 1 || normalizedRoles.some((role) => role === 'admin' || role === 'administrador' || role === 'gerente')
 
   return {
     roleNames,
@@ -128,7 +128,7 @@ export function getCurrentUserAccess(db: Database.Database) {
 
 export function hasPermission(db: Database.Database, permissionName: string) {
   const access = getCurrentUserAccess(db)
-  return access.isAdminLike || access.permissionNames.includes(permissionName)
+  return access.userId === 1 || access.permissionNames.includes(permissionName)
 }
 
 export function requirePermission(db: Database.Database, permissionName: string) {
@@ -184,9 +184,10 @@ export function login(db: Database.Database, payload: AuthInput): AuthResult {
         u.username, 
         u.password_hash, 
         u.requiere_cambio_password,
-        u.estado, 
+        u.estado as usuario_estado, 
         t.id_trabajador, 
-        t.nombres
+        t.nombres,
+        t.estado as trabajador_estado
       FROM usuarios u
       LEFT JOIN trabajadores t ON t.id_usuario = u.id_usuario
       WHERE u.username = ?
@@ -197,8 +198,8 @@ export function login(db: Database.Database, payload: AuthInput): AuthResult {
       return { success: false, message: 'Usuario no encontrado.' }
     }
     
-    if (user.estado !== 'activo') {
-      return { success: false, message: 'Usuario inactivo.' }
+    if (user.usuario_estado !== 'activo' || (user.id_trabajador && user.trabajador_estado !== 'activo')) {
+      return { success: false, message: 'El usuario o trabajador se encuentra inactivo.' }
     }
 
     if (!verifyPassword(payload.password_plain, user.password_hash)) {

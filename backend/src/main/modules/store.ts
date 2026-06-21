@@ -614,9 +614,11 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
   const workerAdminFilter = canManageWorkers ? '' : 'WHERE t.id_trabajador = ?'
   const workerAdminParams = canManageWorkers ? [] : [getCurrentWorkerId() ?? -1]
   const workers = database.prepare(`
-    SELECT t.id_trabajador, t.id_usuario, t.cedula, t.nombres, t.apellidos, t.cargo, t.salario_base, t.estado, t.creado_en, ur.id_rol 
+    SELECT t.id_trabajador, t.id_usuario, t.cedula, t.nombres, t.apellidos, t.cargo, t.salario_base, t.estado, t.creado_en, ur.id_rol, u.username, r.nombre AS rol_nombre
     FROM trabajadores t
     LEFT JOIN usuario_rol ur ON ur.id_usuario = t.id_usuario
+    LEFT JOIN usuarios u ON u.id_usuario = t.id_usuario
+    LEFT JOIN roles r ON r.id_rol = ur.id_rol
     ${workerAdminFilter}
     ORDER BY t.nombres ASC
   `).all(...workerAdminParams) as WorkerRow[]
@@ -1681,7 +1683,7 @@ type DailyChartSqlRow = {
 
 export function getSalesReport(database: Database.Database, input: SalesReportInput): SalesReportData {
   const access = getCurrentUserAccess(database)
-  if (!access.isAdminLike) {
+  if (!hasPermission(database, 'VER_REPORTES') && !hasPermission(database, 'GENERAR_REPORTES')) {
     throw new Error('No tienes permiso para consultar reportes administrativos.')
   }
 

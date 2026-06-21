@@ -21,7 +21,7 @@ import type {
   SalesReportData,
 } from '@shared/ipc/contracts'
 
-type TabName = 'home' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'administracion' | 'reportes'
+type TabName = 'home' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'administracion' | 'admin-roles' | 'admin-trabajadores' | 'admin-turnos' | 'admin-auditoria' | 'reportes'
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
 type ThemeName = 'light' | 'dark'
@@ -109,7 +109,7 @@ function initTheme() {
 }
 
 function hasPermission(permissionName: string) {
-  return Boolean(currentUser?.isAdminLike || currentUser?.permissionNames.includes(permissionName))
+  return Boolean(currentUser?.id_usuario === 1 || currentUser?.permissionNames.includes(permissionName))
 }
 
 function hasAnyPermission(permissionNames: string[]) {
@@ -125,14 +125,18 @@ function canAccessTab(tabName: TabName) {
     ventas: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
     turnos: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
     administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES', 'GESTIONAR_TURNOS']),
-    reportes: Boolean(currentUser?.isAdminLike),
+    'admin-roles': hasPermission('GESTIONAR_ROLES'),
+    'admin-trabajadores': hasPermission('GESTIONAR_TRABAJADORES'),
+    'admin-turnos': hasPermission('GESTIONAR_TURNOS'),
+    'admin-auditoria': Boolean(currentUser?.isAdminLike),
+    reportes: hasAnyPermission(['VER_REPORTES', 'GENERAR_REPORTES']),
   }
 
   return accessByTab[tabName]
 }
 
 function getFirstAccessibleTab(): TabName {
-  return (['home', 'dashboard', 'inventario', 'movimientos', 'ventas', 'turnos', 'administracion', 'reportes'] as TabName[]).find(canAccessTab) ?? 'home'
+  return (['home', 'dashboard', 'inventario', 'movimientos', 'ventas', 'turnos', 'admin-roles', 'admin-trabajadores', 'admin-turnos', 'admin-auditoria', 'reportes'] as TabName[]).find(canAccessTab) ?? 'home'
 }
 
 
@@ -141,6 +145,7 @@ function setActiveTab(tabName: TabName) {
 
   document.querySelectorAll<HTMLElement>('.tabs__button[data-tab]').forEach((button) => {
     const buttonTab = button.dataset.tab as TabName | undefined
+    if (buttonTab === ('administracion-group' as any)) return
     const allowed = buttonTab ? canAccessTab(buttonTab) : false
     const isActive = allowed && buttonTab === nextTab
     button.hidden = !allowed
@@ -155,6 +160,17 @@ function setActiveTab(tabName: TabName) {
     panel.toggleAttribute('aria-hidden', !allowed)
     panel.classList.toggle('is-active', allowed && panelTab === nextTab)
   })
+
+  // Auto-expand accordion if active tab is a sub-tab
+  const isSubTab = ['admin-roles', 'admin-trabajadores', 'admin-turnos', 'admin-auditoria'].includes(nextTab)
+  if (isSubTab) {
+    const toggle = document.getElementById('admin-accordion-toggle')
+    const content = document.getElementById('admin-accordion-content')
+    if (toggle && content) {
+      toggle.setAttribute('aria-expanded', 'true')
+      content.style.display = 'flex'
+    }
+  }
 
   if (tabName === 'ventas') {
     setTimeout(() => {
@@ -544,11 +560,10 @@ function renderHomeQuickActions() {
         description: 'Consulta metricas, ventas y el estado general del negocio.',
       },
       {
-        tab: 'administracion',
+        tab: 'admin-turnos',
         icon: 'ti-clock-cog',
         title: 'Gestionar Turnos',
         description: 'Configura los horarios de trabajo de la temporada.',
-        target: '#shift-management-card',
       },
     )
   } else {
@@ -874,6 +889,11 @@ function setClosestCardHidden(selector: string, hidden: boolean) {
 }
 
 function applyAccessControl() {
+  const canAccessRoles = hasPermission('GESTIONAR_ROLES')
+  const canAccessTrabajadores = hasPermission('GESTIONAR_TRABAJADORES')
+  const canAccessTurnos = hasPermission('GESTIONAR_TURNOS')
+  const canAccessAuditoria = Boolean(currentUser?.isAdminLike)
+
   const accessByTab: Record<TabName, boolean> = {
     home: true,
     dashboard: canAccessTab('dashboard'),
@@ -881,17 +901,29 @@ function applyAccessControl() {
     movimientos: canAccessTab('movimientos'),
     ventas: canAccessTab('ventas'),
     turnos: canAccessTab('turnos'),
-    administracion: canAccessTab('administracion'),
+    administracion: false,
+    'admin-roles': canAccessRoles,
+    'admin-trabajadores': canAccessTrabajadores,
+    'admin-turnos': canAccessTurnos,
+    'admin-auditoria': canAccessAuditoria,
     reportes: canAccessTab('reportes'),
   }
 
   document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
     const tabName = button.dataset.tab as TabName | undefined
+    if (tabName === ('administracion-group' as any)) return
     const allowed = tabName ? accessByTab[tabName] : false
     button.hidden = !allowed
     button.toggleAttribute('aria-hidden', !allowed)
     button.disabled = !allowed
   })
+
+  // Group visibility
+  const adminAccordion = document.getElementById('admin-accordion')
+  if (adminAccordion) {
+    const hasAnyAdminAccess = canAccessRoles || canAccessTrabajadores || canAccessTurnos || canAccessAuditoria
+    adminAccordion.hidden = !hasAnyAdminAccess
+  }
 
   document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
     const tabName = panel.dataset.panel as TabName | undefined
@@ -1675,20 +1707,28 @@ function renderWorkersTable(data: BootstrapData) {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#workers-table tbody')
   if (!tableBody) return
   if (data.workers.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay trabajadores registrados.</td></tr>'
+    tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay trabajadores registrados.</td></tr>'
     return
   }
   tableBody.innerHTML = data.workers.map(worker => `
     <tr>
       <td><strong>${escapeHtml(worker.nombres)} ${escapeHtml(worker.apellidos)}</strong></td>
       <td>${escapeHtml(worker.cargo ?? 'No especificado')}</td>
-      <td>${worker.id_usuario ? '<span class="badge badge--soft">Asignado</span>' : '<span class="badge badge--muted">Sin usuario</span>'}</td>
+      <td>${worker.username ? escapeHtml(worker.username) : '<span class="badge badge--muted">Sin usuario</span>'}</td>
+      <td>${worker.rol_nombre ? escapeHtml(worker.rol_nombre) : '<span class="badge badge--muted">Ninguno</span>'}</td>
+      <td>${escapeHtml(worker.creado_en)}</td>
       <td><span class="badge ${worker.estado === 'activo' ? 'badge--success' : 'badge--muted'}">${escapeHtml(worker.estado)}</span></td>
       <td>
-        ${hasPermission('GESTIONAR_TRABAJADORES') ? `<button class="button button--small" type="button" data-worker-edit="${worker.id_trabajador}">Editar</button>` : ''}
+        <div class="row-actions">
+          ${hasPermission('GESTIONAR_TRABAJADORES') ? `
+            <button class="button button--small" type="button" data-worker-edit="${worker.id_trabajador}">Editar</button>
+            ${worker.id_usuario ? `<button class="button button--small button--ghost" type="button" data-worker-reset="${worker.id_trabajador}" title="Restablecer Contraseña"><i class="ti ti-key"></i></button>` : ''}
+          ` : ''}
+        </div>
       </td>
     </tr>
   `).join('')
+  
   tableBody.querySelectorAll<HTMLButtonElement>('[data-worker-edit]').forEach(button => {
     button.addEventListener('click', () => {
       const workerId = Number(button.dataset.workerEdit)
@@ -1696,6 +1736,32 @@ function renderWorkersTable(data: BootstrapData) {
       if (worker) {
         fillWorkerForm(worker)
         setStatus('worker-status', `Editando ${worker.nombres}.`, 'info')
+      }
+    })
+  })
+
+  tableBody.querySelectorAll<HTMLButtonElement>('[data-worker-reset]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const workerId = Number(button.dataset.workerReset)
+      const worker = data.workers.find(w => w.id_trabajador === workerId)
+      if (!worker) return
+      
+      if (!window.confirm(`¿Estas seguro de restablecer la contraseña a "12345" para el usuario ${worker.username}?`)) {
+        return
+      }
+
+      button.disabled = true
+      try {
+        const result = await window.inventoryApi.resetUserPassword(workerId)
+        if (result.success) {
+          alert('Contraseña restablecida correctamente. La nueva contraseña es 12345.')
+        } else {
+          alert(result.message || 'Error al restablecer la contraseña.')
+        }
+      } catch (error) {
+        alert(getFriendlyErrorMessage(error, 'No se pudo restablecer la contraseña.'))
+      } finally {
+        button.disabled = false
       }
     })
   })
@@ -1766,22 +1832,195 @@ function renderShiftsTable(data: BootstrapData) {
 
 }
 
+let currentAuditPage = 1
+const AUDIT_LIMIT = 20
+
+const ACTIONS_BY_MODULE: Record<string, string[]> = {
+  auth: ['LOGIN', 'LOGOUT'],
+  asistencias: ['INSERT', 'UPDATE', 'DELETE'],
+  productos: ['INSERT', 'UPDATE', 'DELETE'],
+  inventario_movimientos: ['INSERT', 'UPDATE', 'DELETE'],
+  ventas: ['INSERT', 'UPDATE', 'DELETE'],
+  roles: ['INSERT', 'UPDATE', 'DELETE'],
+  trabajadores: ['INSERT', 'UPDATE', 'DELETE'],
+  usuarios: ['INSERT', 'UPDATE', 'DELETE'],
+  reportes: ['GENERATE', 'VIEW', 'EXPORT']
+}
+
 function renderAuditTable(data: BootstrapData) {
+  fetchAndRenderAuditLogs()
+  
+  const moduleSelect = document.getElementById('audit-filter-module') as HTMLSelectElement
+  const actionSelect = document.getElementById('audit-filter-action') as HTMLSelectElement
+  const btnFilter = document.getElementById('btn-audit-filter')
+  const btnExport = document.getElementById('btn-audit-export')
+  const btnPrev = document.getElementById('btn-audit-prev')
+  const btnNext = document.getElementById('btn-audit-next')
+  
+  if (moduleSelect && actionSelect && !moduleSelect.dataset.bound) {
+    moduleSelect.dataset.bound = 'true'
+    moduleSelect.addEventListener('change', () => {
+      const mod = moduleSelect.value
+      actionSelect.innerHTML = '<option value="">Todas las acciones</option>'
+      if (mod && ACTIONS_BY_MODULE[mod]) {
+        ACTIONS_BY_MODULE[mod].forEach(act => {
+          const opt = document.createElement('option')
+          opt.value = act
+          opt.textContent = act
+          actionSelect.appendChild(opt)
+        })
+      } else {
+        const defaultActions = ['LOGIN', 'LOGOUT', 'INSERT', 'UPDATE', 'DELETE']
+        defaultActions.forEach(act => {
+          const opt = document.createElement('option')
+          opt.value = act
+          opt.textContent = act
+          actionSelect.appendChild(opt)
+        })
+      }
+    })
+    moduleSelect.dispatchEvent(new Event('change'))
+  }
+
+  if (btnFilter && !btnFilter.dataset.bound) {
+    btnFilter.dataset.bound = 'true'
+    btnFilter.addEventListener('click', () => {
+      currentAuditPage = 1
+      fetchAndRenderAuditLogs()
+    })
+  }
+
+  if (btnExport && !btnExport.dataset.bound) {
+    btnExport.dataset.bound = 'true'
+    btnExport.addEventListener('click', exportAuditLogs)
+  }
+
+  if (btnPrev && !btnPrev.dataset.bound) {
+    btnPrev.dataset.bound = 'true'
+    btnPrev.addEventListener('click', () => {
+      if (currentAuditPage > 1) {
+        currentAuditPage--
+        fetchAndRenderAuditLogs()
+      }
+    })
+  }
+
+  if (btnNext && !btnNext.dataset.bound) {
+    btnNext.dataset.bound = 'true'
+    btnNext.addEventListener('click', () => {
+      currentAuditPage++
+      fetchAndRenderAuditLogs()
+    })
+  }
+}
+
+async function fetchAndRenderAuditLogs() {
+  const moduleSelect = document.querySelector<HTMLSelectElement>('#audit-filter-module')
+  const actionSelect = document.querySelector<HTMLSelectElement>('#audit-filter-action')
+  const userFilter = document.querySelector<HTMLInputElement>('#audit-filter-user')
+  const dateFrom = document.querySelector<HTMLInputElement>('#audit-filter-date-from')
+  const dateTo = document.querySelector<HTMLInputElement>('#audit-filter-date-to')
+  
+  const input = {
+    page: currentAuditPage,
+    limit: AUDIT_LIMIT,
+    modulo: moduleSelect?.value || null,
+    accion: actionSelect?.value || null,
+    usuario: userFilter?.value || null,
+    fechaDesde: dateFrom?.value || null,
+    fechaHasta: dateTo?.value || null
+  }
+
+  try {
+    const result = await window.inventoryApi.fetchAuditLogs(input)
+    renderAuditLogsDynamic(result)
+  } catch (err) {
+    console.error('Error fetching audit logs:', err)
+  }
+}
+
+function renderAuditLogsDynamic(result: any) {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#audit-table tbody')
   if (!tableBody) return
-  if (data.auditLogs.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay eventos registrados.</td></tr>'
-    return
+  
+  if (result.logs.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay eventos registrados que coincidan.</td></tr>'
+  } else {
+    tableBody.innerHTML = result.logs.map((log: any) => `
+      <tr>
+        <td>${escapeHtml(formatDateTime(log.fecha_evento))}</td>
+        <td>${escapeHtml(log.usuario)}</td>
+        <td><span class="badge badge--soft">${escapeHtml(log.modulo)}</span></td>
+        <td><strong>${escapeHtml(log.accion)}</strong></td>
+        <td>${escapeHtml(log.descripcion ?? '')}</td>
+      </tr>
+    `).join('')
   }
-  tableBody.innerHTML = data.auditLogs.map(log => `
-    <tr>
-      <td>${escapeHtml(formatDateTime(log.fecha_evento))}</td>
-      <td>${escapeHtml(log.usuario)}</td>
-      <td><span class="badge badge--soft">${escapeHtml(log.modulo)}</span></td>
-      <td><strong>${escapeHtml(log.accion)}</strong></td>
-      <td>${escapeHtml(log.descripcion ?? '')}</td>
-    </tr>
-  `).join('')
+
+  const infoEl = document.getElementById('audit-pagination-info')
+  const pageEl = document.getElementById('audit-pagination-page')
+  const btnPrev = document.getElementById('btn-audit-prev') as HTMLButtonElement
+  const btnNext = document.getElementById('btn-audit-next') as HTMLButtonElement
+
+  if (infoEl) infoEl.textContent = `Mostrando ${result.totalItems} registros`
+  if (pageEl) pageEl.textContent = `Página ${result.currentPage} de ${result.totalPages}`
+  
+  if (btnPrev) btnPrev.disabled = result.currentPage <= 1
+  if (btnNext) btnNext.disabled = result.currentPage >= result.totalPages
+
+  if (btnPrev && btnPrev.parentElement) {
+    btnPrev.parentElement.style.display = result.totalPages <= 1 ? 'none' : 'flex'
+  }
+  
+  currentAuditPage = result.currentPage
+}
+
+async function exportAuditLogs() {
+  const moduleSelect = document.querySelector<HTMLSelectElement>('#audit-filter-module')
+  const actionSelect = document.querySelector<HTMLSelectElement>('#audit-filter-action')
+  const userFilter = document.querySelector<HTMLInputElement>('#audit-filter-user')
+  const dateFrom = document.querySelector<HTMLInputElement>('#audit-filter-date-from')
+  const dateTo = document.querySelector<HTMLInputElement>('#audit-filter-date-to')
+  
+  const input = {
+    page: 1,
+    limit: 5000,
+    modulo: moduleSelect?.value || null,
+    accion: actionSelect?.value || null,
+    usuario: userFilter?.value || null,
+    fechaDesde: dateFrom?.value || null,
+    fechaHasta: dateTo?.value || null
+  }
+
+  try {
+    const result = await window.inventoryApi.fetchAuditLogs(input)
+    if (result.logs.length === 0) {
+      showToast.warning('No hay datos para exportar.')
+      return
+    }
+    
+    const headers = ['Fecha', 'Usuario', 'Módulo', 'Acción', 'Detalle']
+    const rows = result.logs.map((log: any) => [
+      formatDateTime(log.fecha_evento),
+      log.usuario,
+      log.modulo,
+      log.accion,
+      log.descripcion || ''
+    ])
+    
+    const csvContent = [headers, ...rows].map((row: any[]) => row.map((cell: any) => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n')
+    
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `auditoria_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('Error exportando CSV:', err)
+    showToast.error('Error al exportar.')
+  }
 }
 
 function renderProductSearchResults(query = '') {
@@ -2316,6 +2555,12 @@ function fillRoleForm(role: BootstrapData['roles'][number]) {
   if (!form) return
   roleFormState.id_rol = role.id_rol
   ;(form.elements.namedItem('id_rol') as HTMLInputElement).value = String(role.id_rol)
+
+  const title = document.getElementById('role-form-title')
+  if (title) title.textContent = 'Editar Rol'
+  const formView = document.getElementById('roles-form-view')
+  if (formView) formView.style.display = 'flex'
+
   ;(form.elements.namedItem('nombre') as HTMLInputElement).value = role.nombre
   ;(form.elements.namedItem('descripcion') as HTMLTextAreaElement).value = role.descripcion ?? ''
   ;(form.elements.namedItem('estado') as HTMLInputElement).checked = Boolean(role.estado)
@@ -2348,6 +2593,12 @@ function fillWorkerForm(worker: BootstrapData['workers'][number]) {
   if (!form) return
   workerFormState.id_trabajador = worker.id_trabajador
   ;(form.elements.namedItem('id_trabajador') as HTMLInputElement).value = String(worker.id_trabajador)
+
+  const title = document.getElementById('worker-form-title')
+  if (title) title.textContent = 'Editar Trabajador'
+  const formView = document.getElementById('workers-form-view')
+  if (formView) formView.style.display = 'flex'
+
   ;(form.elements.namedItem('nombres') as HTMLInputElement).value = worker.nombres
   ;(form.elements.namedItem('apellidos') as HTMLInputElement).value = worker.apellidos
   ;(form.elements.namedItem('cedula') as HTMLInputElement).value = worker.cedula ?? ''
@@ -2404,6 +2655,15 @@ function setStatus(targetId: string, message: string, kind: 'info' | 'success' |
   target.textContent = message
   target.dataset.kind = kind
 
+  if (message) {
+    if (kind === 'error') {
+      showToast.error(message)
+    } else if (kind === 'success') {
+      showToast.success(message)
+    } else {
+      showToast.info(message)
+    }
+  }
 }
 
 function getFriendlyErrorMessage(error: unknown, fallback: string) {
@@ -3091,10 +3351,21 @@ async function bootstrap() {
     }
   })
 
-  document.querySelector<HTMLButtonElement>('#role-form-reset')?.addEventListener('click', () => {
+  document.querySelector<HTMLButtonElement>('#btn-new-role')?.addEventListener('click', () => {
     resetRoleForm()
+    const title = document.getElementById('role-form-title')
+    if (title) title.textContent = 'Crear Nuevo Rol'
     setStatus('role-status', 'Formulario listo para un nuevo rol.', 'info')
+    const formView = document.getElementById('roles-form-view')
+    if (formView) formView.style.display = 'flex'
   })
+
+  document.querySelector<HTMLButtonElement>('#btn-cancel-role')?.addEventListener('click', () => {
+    const formView = document.getElementById('roles-form-view')
+    if (formView) formView.style.display = 'none'
+    resetRoleForm()
+  })
+
   roleForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
     if (!hasPermission('GESTIONAR_ROLES')) {
@@ -3115,15 +3386,28 @@ async function bootstrap() {
       setStatus('role-status', 'Rol guardado correctamente.', 'success')
       resetRoleForm()
       await refresh()
+      const formView = document.getElementById('roles-form-view')
+      if (formView) formView.style.display = 'none'
     } catch (error) {
       setStatus('role-status', error instanceof Error ? error.message : 'Error al guardar.', 'error')
     }
   })
 
-  document.querySelector<HTMLButtonElement>('#worker-form-reset')?.addEventListener('click', () => {
+  document.querySelector<HTMLButtonElement>('#btn-new-worker')?.addEventListener('click', () => {
     resetWorkerForm()
+    const title = document.getElementById('worker-form-title')
+    if (title) title.textContent = 'Crear Nuevo Trabajador'
     setStatus('worker-status', 'Formulario listo para un nuevo trabajador.', 'info')
+    const formView = document.getElementById('workers-form-view')
+    if (formView) formView.style.display = 'flex'
   })
+
+  document.querySelector<HTMLButtonElement>('#btn-cancel-worker')?.addEventListener('click', () => {
+    const formView = document.getElementById('workers-form-view')
+    if (formView) formView.style.display = 'none'
+    resetWorkerForm()
+  })
+
   workerForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
     if (!hasPermission('GESTIONAR_TRABAJADORES')) {
@@ -3147,6 +3431,8 @@ async function bootstrap() {
       setStatus('worker-status', 'Trabajador guardado correctamente.', 'success')
       resetWorkerForm()
       await refresh()
+      const formView = document.getElementById('workers-form-view')
+      if (formView) formView.style.display = 'none'
     } catch (error) {
       setStatus('worker-status', error instanceof Error ? error.message : 'Error al guardar.', 'error')
     }
@@ -3222,8 +3508,18 @@ async function bootstrap() {
 
   document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
     button.addEventListener('click', () => {
-      const tabName = button.dataset.tab as TabName | undefined
-      if (tabName) setActiveTab(tabName)
+      const tabName = button.dataset.tab as TabName | string | undefined
+      if (tabName === 'administracion-group') {
+        const toggle = document.getElementById('admin-accordion-toggle')
+        const content = document.getElementById('admin-accordion-content')
+        if (toggle && content) {
+          const isExpanded = toggle.getAttribute('aria-expanded') === 'true'
+          toggle.setAttribute('aria-expanded', (!isExpanded).toString())
+          content.style.display = isExpanded ? 'none' : 'flex'
+        }
+        return
+      }
+      if (tabName) setActiveTab(tabName as TabName)
     })
   })
 
@@ -3460,6 +3756,13 @@ function initLogin() {
       })
       if (result.success) {
         currentUser = result.user ?? null
+
+        if (result.requiresPasswordChange) {
+          document.getElementById('login-overlay')!.style.display = 'none'
+          document.getElementById('password-change-overlay')!.style.display = 'flex'
+          return
+        }
+
         document.getElementById('login-overlay')!.style.display = 'none'
         document.getElementById('main-app')!.style.display = 'block'
         setActiveTab('home')
@@ -3471,6 +3774,91 @@ function initLogin() {
       setStatus('login-status', 'Error de conexión con el backend', 'error')
     }
   })
+
+  const passwordChangeForm = document.getElementById('password-change-form') as HTMLFormElement | null
+  const newPasswordInput = document.getElementById('new-password-input') as HTMLInputElement | null
+  const passwordStrengthProgress = document.getElementById('password-strength-progress')
+  const passwordStrengthText = document.getElementById('password-strength-text')
+  const passwordChangeSubmit = document.getElementById('password-change-submit') as HTMLButtonElement | null
+
+  newPasswordInput?.addEventListener('input', (e) => {
+    const val = (e.target as HTMLInputElement).value
+    let strength = 0
+    if (val.length >= 8) strength += 1
+    if (/[A-Z]/.test(val)) strength += 1
+    if (/[0-9]/.test(val)) strength += 1
+    if (/[^A-Za-z0-9]/.test(val)) strength += 1
+
+    if (passwordStrengthProgress && passwordStrengthText && passwordChangeSubmit) {
+      passwordStrengthProgress.className = 'password-strength-progress'
+      if (val.length === 0) {
+        passwordStrengthProgress.style.width = '0%'
+        passwordStrengthText.textContent = 'La contraseña debe tener al menos 8 caracteres'
+        passwordChangeSubmit.disabled = true
+      } else if (strength <= 1) {
+        passwordStrengthProgress.style.width = '33%'
+        passwordStrengthProgress.classList.add('strength-weak')
+        passwordStrengthText.textContent = 'Débil (usa mayúsculas, números y símbolos)'
+        passwordChangeSubmit.disabled = val.length < 8
+      } else if (strength === 2 || strength === 3) {
+        passwordStrengthProgress.style.width = '66%'
+        passwordStrengthProgress.classList.add('strength-medium')
+        passwordStrengthText.textContent = 'Buena (añade más variedad para que sea fuerte)'
+        passwordChangeSubmit.disabled = false
+      } else {
+        passwordStrengthProgress.style.width = '100%'
+        passwordStrengthProgress.classList.add('strength-strong')
+        passwordStrengthText.textContent = 'Fuerte'
+        passwordChangeSubmit.disabled = false
+      }
+    }
+  })
+
+  passwordChangeForm?.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    if (!currentUser) return
+
+    const formData = new FormData(passwordChangeForm)
+    const newPassword = String(formData.get('new_password') ?? '')
+    const confirmPassword = String(formData.get('confirm_password') ?? '')
+
+    if (newPassword !== confirmPassword) {
+      setStatus('password-change-status', 'Las contraseñas no coinciden', 'error')
+      return
+    }
+
+    if (newPassword.length < 8) {
+      setStatus('password-change-status', 'La contraseña debe tener al menos 8 caracteres', 'error')
+      return
+    }
+
+    try {
+      const result = await window.inventoryApi.changePassword({ userId: currentUser.id_usuario, newPasswordPlain: newPassword })
+      if (result.success) {
+        passwordChangeForm.reset()
+        if (passwordStrengthProgress) passwordStrengthProgress.style.width = '0%'
+        if (passwordStrengthText) passwordStrengthText.textContent = 'La contraseña debe tener al menos 8 caracteres'
+        if (passwordChangeSubmit) passwordChangeSubmit.disabled = true
+        document.getElementById('password-change-overlay')!.style.display = 'none'
+        document.getElementById('main-app')!.style.display = 'block'
+        setActiveTab('home')
+        void bootstrap()
+      } else {
+        setStatus('password-change-status', result.message ?? 'Error al actualizar', 'error')
+      }
+    } catch (err) {
+      setStatus('password-change-status', 'Error de conexión', 'error')
+    }
+  })
+
+  document.getElementById('cancel-password-change')?.addEventListener('click', () => {
+    currentUser = null
+    passwordChangeForm?.reset()
+    loginForm?.reset()
+    document.getElementById('password-change-overlay')!.style.display = 'none'
+    document.getElementById('login-overlay')!.style.display = 'flex'
+  })
+
   const logoutBtn = document.getElementById('logout-btn')
   logoutBtn?.addEventListener('click', () => {
     currentUser = null
@@ -3486,6 +3874,7 @@ function initLogin() {
     const loginForm = document.getElementById('login-form') as HTMLFormElement | null
     loginForm?.reset()
     document.getElementById('main-app')!.style.display = 'none'
+    document.getElementById('password-change-overlay')!.style.display = 'none'
     document.getElementById('login-overlay')!.style.display = 'flex'
     sidebar?.classList.remove('is-collapsed')
   })
