@@ -15,6 +15,7 @@ import {
 } from '../modules/store'
 import { login } from '../modules/auth'
 import { deleteShift, saveRole, saveShift, saveWorker, setShiftState } from '../modules/admin'
+import { getParallelDollarRate } from '../modules/exchange'
 
 function registerHandler(channel: string, handler: Parameters<typeof ipcMain.handle>[1]) {
   ipcMain.removeHandler(channel)
@@ -32,6 +33,10 @@ export function registerSystemIpc(database: Database.Database) {
 
   registerHandler('app:get-bootstrap-data', () => {
     return getBootstrapData(database)
+  })
+
+  registerHandler('market:get-parallel-dollar-rate', (_event, forceRefresh) => {
+    return getParallelDollarRate(Boolean(forceRefresh))
   })
 
   registerHandler('inventory:save-product', (_event, payload) => {

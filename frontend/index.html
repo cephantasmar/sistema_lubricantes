@@ -70,11 +70,37 @@
               <p id="landing-message">Que tengas una excelente jornada de trabajo.</p>
             </div>
 
-            <aside class="landing-clock" aria-label="Fecha y hora actual">
-              <span id="landing-date">Cargando fecha...</span>
-              <strong id="landing-clock">--:--</strong>
-              <small>Hora local del equipo</small>
-            </aside>
+            <div class="landing-top-widgets">
+              <aside class="landing-clock" aria-label="Fecha y hora actual">
+                <span id="landing-date">Cargando fecha...</span>
+                <strong id="landing-clock">--:--</strong>
+                <small>Hora local del equipo</small>
+              </aside>
+
+              <aside class="exchange-card" aria-label="Tipo de cambio paralelo referencial">
+                <div class="exchange-card__header">
+                  <div>
+                    <span>Dólar paralelo</span>
+                    <small>Referencia USDT/BOB</small>
+                  </div>
+                  <button class="exchange-refresh" id="exchange-refresh" type="button" title="Actualizar tipo de cambio">
+                    <i class="ti ti-refresh"></i>
+                  </button>
+                </div>
+                <div class="exchange-card__value">
+                  <i class="ti ti-currency-dollar"></i>
+                  <div>
+                    <strong id="exchange-average">Bs --</strong>
+                    <span id="exchange-status">Consultando Binance P2P...</span>
+                  </div>
+                </div>
+                <div class="exchange-card__metrics">
+                  <div><span>Comprar USDT</span><strong id="exchange-buy">Bs --</strong></div>
+                  <div><span>Vender USDT</span><strong id="exchange-sell">Bs --</strong></div>
+                </div>
+                <small class="exchange-card__footnote" id="exchange-updated">Referencia de mercado, no tipo de cambio oficial.</small>
+              </aside>
+            </div>
 
             <section class="quick-actions-panel">
               <div class="home-section-header">

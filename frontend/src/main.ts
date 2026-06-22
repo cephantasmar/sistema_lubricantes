@@ -8,6 +8,7 @@ import type {
   ClientFormInput,
   InventoryAuditInput,
   MovementFormInput,
+  ParallelDollarRate,
   ProductFormInput,
   ProductRow,
   RoleFormInput,
@@ -25,6 +26,8 @@ type InventorySearchField = 'all' | 'codigo' | 'nombre'
 type ThemeName = 'light' | 'dark'
 
 const THEME_STORAGE_KEY = 'lubricantes-theme'
+const EXCHANGE_CACHE_KEY = 'lubricantes-parallel-dollar-rate'
+const EXCHANGE_REFRESH_MS = 5 * 60 * 1000
 
 type ProductFormState = { id_producto: number | null }
 const productFormState: ProductFormState = { id_producto: null }
@@ -71,6 +74,7 @@ let clockInterval: number | null = null
 let landingDismissTimer: number | null = null
 let bootstrapInitialized = false
 let saleSubmissionInProgress = false
+let exchangeRateInterval: number | null = null
 
 function applyTheme(theme: ThemeName) {
   document.documentElement.dataset.theme = theme
@@ -334,6 +338,75 @@ function renderMetricCards(data: BootstrapData) {
   `).join('')
   if (metricsContainer) metricsContainer.innerHTML = markup
   if (quickStats) quickStats.innerHTML = markup
+}
+
+function formatExchangeUpdateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Hora de actualización no disponible'
+
+  return new Intl.DateTimeFormat('es-BO', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function renderParallelDollarRate(rate: ParallelDollarRate, cached = false) {
+  const card = document.querySelector<HTMLElement>('.exchange-card')
+  const average = document.querySelector<HTMLElement>('#exchange-average')
+  const buy = document.querySelector<HTMLElement>('#exchange-buy')
+  const sell = document.querySelector<HTMLElement>('#exchange-sell')
+  const status = document.querySelector<HTMLElement>('#exchange-status')
+  const updated = document.querySelector<HTMLElement>('#exchange-updated')
+  const midpoint = (Number(rate.buy) + Number(rate.sell)) / 2
+
+  if (average) average.textContent = `Bs ${midpoint.toFixed(2)}`
+  if (buy) buy.textContent = `Bs ${Number(rate.buy).toFixed(2)}`
+  if (sell) sell.textContent = `Bs ${Number(rate.sell).toFixed(2)}`
+  if (status) status.textContent = cached ? 'Último valor guardado · Sin conexión' : `${rate.source} · Mediana de ${rate.sampleSize} ofertas`
+  if (updated) updated.textContent = `${formatExchangeUpdateTime(rate.updatedAt)} · Referencia de mercado, no tipo oficial.`
+  if (card) card.dataset.state = cached ? 'offline' : 'online'
+}
+
+function readCachedParallelDollarRate() {
+  try {
+    const rawValue = localStorage.getItem(EXCHANGE_CACHE_KEY)
+    if (!rawValue) return null
+    return JSON.parse(rawValue) as ParallelDollarRate
+  } catch {
+    return null
+  }
+}
+
+async function loadParallelDollarRate(forceRefresh = false) {
+  const refreshButton = document.querySelector<HTMLButtonElement>('#exchange-refresh')
+  const status = document.querySelector<HTMLElement>('#exchange-status')
+  refreshButton?.classList.add('is-loading')
+  if (refreshButton) refreshButton.disabled = true
+  if (status) status.textContent = 'Actualizando mercado P2P...'
+
+  try {
+    const rate = await window.inventoryApi.getParallelDollarRate(forceRefresh)
+    renderParallelDollarRate(rate)
+    try {
+      localStorage.setItem(EXCHANGE_CACHE_KEY, JSON.stringify(rate))
+    } catch {
+      // La tasa seguirá visible aunque no se pueda persistir localmente.
+    }
+  } catch {
+    const cachedRate = readCachedParallelDollarRate()
+    if (cachedRate) {
+      renderParallelDollarRate(cachedRate, true)
+    } else {
+      const card = document.querySelector<HTMLElement>('.exchange-card')
+      if (card) card.dataset.state = 'offline'
+      if (status) status.textContent = 'Sin conexión · No hay un valor guardado'
+    }
+  } finally {
+    refreshButton?.classList.remove('is-loading')
+    if (refreshButton) refreshButton.disabled = false
+  }
 }
 
 function renderDashboard(data: BootstrapData) {
@@ -2340,6 +2413,7 @@ async function bootstrap() {
   appInfoSnapshot = await window.inventoryApi.getAppInfo()
   startClock()
   loadLocalWeather()
+  void loadParallelDollarRate()
 
   await refresh()
   document.querySelector<HTMLButtonElement>('#weather-refresh')!.onclick = loadLocalWeather
@@ -2348,6 +2422,16 @@ async function bootstrap() {
     return
   }
   bootstrapInitialized = true
+
+  document.querySelector<HTMLButtonElement>('#exchange-refresh')?.addEventListener('click', () => {
+    void loadParallelDollarRate(true)
+  })
+  window.addEventListener('online', () => {
+    void loadParallelDollarRate(true)
+  })
+  exchangeRateInterval = window.setInterval(() => {
+    if (navigator.onLine) void loadParallelDollarRate()
+  }, EXCHANGE_REFRESH_MS)
 
   const productForm = document.querySelector<HTMLFormElement>('#product-form')
   const movementForm = document.querySelector<HTMLFormElement>('#movement-form')

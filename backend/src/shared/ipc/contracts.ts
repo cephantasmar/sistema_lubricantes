@@ -4,6 +4,14 @@ export type AppInfo = {
   databasePath: string
 }
 
+export type ParallelDollarRate = {
+  buy: number
+  sell: number
+  updatedAt: string
+  source: 'Binance P2P'
+  sampleSize: number
+}
+
 export type ReferenceItem = {
   id: number
   nombre: string
