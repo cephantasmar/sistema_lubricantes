@@ -22,7 +22,7 @@ import type {
   SalesReportData,
 } from '@shared/ipc/contracts'
 
-type TabName = 'home' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'administracion' | 'admin-roles' | 'admin-trabajadores' | 'admin-turnos' | 'admin-auditoria' | 'reportes'
+type TabName = 'home' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'administracion' | 'admin-roles' | 'admin-trabajadores' | 'admin-turnos' | 'admin-auditoria' | 'admin-backups' | 'reportes'
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
 type ThemeName = 'light' | 'dark'
@@ -128,11 +128,12 @@ function canAccessTab(tabName: TabName) {
     movimientos: hasPermission('GESTIONAR_MOVIMIENTOS'),
     ventas: hasPermission('GESTIONAR_VENTAS'),
     turnos: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
-    administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES', 'GESTIONAR_TURNOS', 'VER_AUDITORIA']),
+    administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES', 'GESTIONAR_TURNOS', 'VER_AUDITORIA']) || Boolean(currentUser?.isAdminLike) || currentUser?.id_usuario === 1,
     'admin-roles': hasPermission('GESTIONAR_ROLES'),
     'admin-trabajadores': hasPermission('GESTIONAR_TRABAJADORES'),
     'admin-turnos': hasPermission('GESTIONAR_TURNOS'),
     'admin-auditoria': hasPermission('VER_AUDITORIA'),
+    'admin-backups': Boolean(currentUser?.isAdminLike) || currentUser?.id_usuario === 1,
     reportes: hasPermission('GESTIONAR_REPORTES'),
   }
 
@@ -140,7 +141,7 @@ function canAccessTab(tabName: TabName) {
 }
 
 function getFirstAccessibleTab(): TabName {
-  return (['home', 'dashboard', 'inventario', 'movimientos', 'ventas', 'turnos', 'admin-roles', 'admin-trabajadores', 'admin-turnos', 'admin-auditoria', 'reportes'] as TabName[]).find(canAccessTab) ?? 'home'
+  return (['home', 'dashboard', 'inventario', 'movimientos', 'ventas', 'turnos', 'admin-roles', 'admin-trabajadores', 'admin-turnos', 'admin-auditoria', 'admin-backups', 'reportes'] as TabName[]).find(canAccessTab) ?? 'home'
 }
 
 
@@ -166,7 +167,7 @@ function setActiveTab(tabName: TabName) {
   })
 
   // Auto-expand accordion if active tab is a sub-tab
-  const isSubTab = ['admin-roles', 'admin-trabajadores', 'admin-turnos', 'admin-auditoria'].includes(nextTab)
+  const isSubTab = ['admin-roles', 'admin-trabajadores', 'admin-turnos', 'admin-auditoria', 'admin-backups'].includes(nextTab)
   if (isSubTab) {
     const toggle = document.getElementById('admin-accordion-toggle')
     const content = document.getElementById('admin-accordion-content')
@@ -966,6 +967,7 @@ function applyAccessControl() {
   const canAccessTrabajadores = hasPermission('GESTIONAR_TRABAJADORES')
   const canAccessTurnos = hasPermission('GESTIONAR_TURNOS')
   const canAccessAuditoria = Boolean(currentUser?.isAdminLike)
+  const canAccessBackups = Boolean(currentUser?.isAdminLike) || currentUser?.id_usuario === 1
 
   const accessByTab: Record<TabName, boolean> = {
     home: true,
@@ -979,6 +981,7 @@ function applyAccessControl() {
     'admin-trabajadores': canAccessTrabajadores,
     'admin-turnos': canAccessTurnos,
     'admin-auditoria': canAccessAuditoria,
+    'admin-backups': canAccessBackups,
     reportes: canAccessTab('reportes'),
   }
 
@@ -994,7 +997,7 @@ function applyAccessControl() {
   // Group visibility
   const adminAccordion = document.getElementById('admin-accordion')
   if (adminAccordion) {
-    const hasAnyAdminAccess = canAccessRoles || canAccessTrabajadores || canAccessTurnos || canAccessAuditoria
+    const hasAnyAdminAccess = canAccessRoles || canAccessTrabajadores || canAccessTurnos || canAccessAuditoria || canAccessBackups
     adminAccordion.hidden = !hasAnyAdminAccess
   }
 
@@ -1142,8 +1145,8 @@ function renderPermissionsCheckboxes(data: BootstrapData) {
     html += `<div class="permission-module"><h4>${escapeHtml(modulo)}</h4>`
     perms.forEach(p => {
       html += `<label class="permission-item">
-        <input type="checkbox" name="permisos[]" value="${p.id_permiso}" />
         <span>${escapeHtml(p.nombre)}</span>
+        <input type="checkbox" name="permisos[]" value="${p.id_permiso}" />
       </label>`
     })
     html += `</div>`
@@ -3594,8 +3597,17 @@ async function bootstrap() {
     button.addEventListener('click', () => {
       const tabName = button.dataset.tab as TabName | string | undefined
       if (tabName === 'administracion-group') {
+        const sidebar = document.getElementById('main-sidebar')
         const toggle = document.getElementById('admin-accordion-toggle')
         const content = document.getElementById('admin-accordion-content')
+        if (sidebar && sidebar.classList.contains('is-collapsed')) {
+          sidebar.classList.remove('is-collapsed')
+          if (toggle && content) {
+            toggle.setAttribute('aria-expanded', 'true')
+            content.style.display = 'flex'
+          }
+          return
+        }
         if (toggle && content) {
           const isExpanded = toggle.getAttribute('aria-expanded') === 'true'
           toggle.setAttribute('aria-expanded', (!isExpanded).toString())
@@ -3721,6 +3733,8 @@ async function bootstrap() {
       })
     })
   })
+
+  setupBackupHandlers()
 }
 
 async function openSaleDetailModal(saleId: number) {
@@ -3820,6 +3834,55 @@ function setupModalCloseHandler() {
 
   closeBtn?.addEventListener('click', closeModal)
   overlay?.addEventListener('click', closeModal)
+}
+
+function setupBackupHandlers() {
+  const btnExport = document.getElementById('btn-export-backup') as HTMLButtonElement | null
+  const btnRestore = document.getElementById('btn-restore-backup') as HTMLButtonElement | null
+
+  btnExport?.addEventListener('click', async () => {
+    btnExport.disabled = true
+    const originalText = btnExport.innerHTML
+    btnExport.innerHTML = '<i class="ti ti-loader-2 animate-spin"></i> Exportando...'
+    setStatus('backup-status', '', 'info')
+
+    try {
+      const res = await window.inventoryApi.createBackup()
+      if (res.success) {
+        setStatus('backup-status', `Copia de seguridad creada correctamente en: ${res.destPath}`, 'success')
+      } else {
+        setStatus('backup-status', res.message, 'error')
+      }
+    } catch (err) {
+      const msg = getFriendlyErrorMessage(err, 'Error al exportar la copia de seguridad.')
+      setStatus('backup-status', msg, 'error')
+    } finally {
+      btnExport.disabled = false
+      btnExport.innerHTML = originalText
+    }
+  })
+
+  btnRestore?.addEventListener('click', async () => {
+    btnRestore.disabled = true
+    const originalText = btnRestore.innerHTML
+    btnRestore.innerHTML = '<i class="ti ti-loader-2 animate-spin"></i> Restaurando...'
+    setStatus('backup-status', '', 'info')
+
+    try {
+      const res = await window.inventoryApi.restoreBackup()
+      if (res.success) {
+        setStatus('backup-status', 'Base de datos restaurada. Reiniciando aplicación...', 'success')
+      } else {
+        setStatus('backup-status', res.message, 'error')
+      }
+    } catch (err) {
+      const msg = getFriendlyErrorMessage(err, 'Error al restaurar la copia de seguridad.')
+      setStatus('backup-status', msg, 'error')
+    } finally {
+      btnRestore.disabled = false
+      btnRestore.innerHTML = originalText
+    }
+  })
 }
 
 function initLogin() {

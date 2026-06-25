@@ -55,4 +55,6 @@ contextBridge.exposeInMainWorld('inventoryApi', {
     ipcRenderer.invoke('admin:set-shift-state', shiftId, enabled) as Promise<{ shiftId: number; enabled: boolean }>,
   recordAttendance: (payload: AttendanceInput) => ipcRenderer.invoke('shifts:record-attendance', payload) as Promise<{ attendanceId: number }>,
   fetchAuditLogs: (payload: FetchAuditLogsInput) => ipcRenderer.invoke('admin:fetch-audit-logs', payload) as Promise<FetchAuditLogsResult>,
+  createBackup: () => ipcRenderer.invoke('backup:create-manual') as Promise<{ success: boolean; message: string; destPath?: string }>,
+  restoreBackup: () => ipcRenderer.invoke('backup:restore-manual') as Promise<{ success: boolean; message: string }>,
 })

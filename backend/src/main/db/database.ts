@@ -4,6 +4,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import schemaSql from '../../shared/database/schema.sql?raw'
 import { hashPassword } from '../modules/auth'
+import { runAutomaticBackup } from '../modules/backup'
 
 let database: Database.Database | null = null
 
@@ -157,6 +158,9 @@ export function getDatabase(): Database.Database {
   }
 
   seedDatabase(database)
+
+  // Ejecutar copia de seguridad diaria automática si corresponde
+  runAutomaticBackup(database)
 
   return database
 }

@@ -98,6 +98,8 @@
                   aria-selected="false" style="padding-left: 2.5rem;"><i class="ti ti-calendar-time"></i> Turnos</button>
                 <button class="tabs__button tabs__button--sub" type="button" data-tab="admin-auditoria" role="tab"
                   aria-selected="false" style="padding-left: 2.5rem;"><i class="ti ti-file-analytics"></i> Auditoría</button>
+                <button class="tabs__button tabs__button--sub" type="button" data-tab="admin-backups" role="tab"
+                  aria-selected="false" style="padding-left: 2.5rem;"><i class="ti ti-database-export"></i> Backups</button>
               </div>
             </div>
             <button class="tabs__button" type="button" data-tab="reportes" role="tab" aria-selected="false"><i class="ti ti-chart-bar"></i> Reportes</button>
@@ -1548,6 +1550,60 @@
                     <button id="btn-audit-prev" class="button button--secondary" disabled>Anterior</button>
                     <span id="audit-pagination-page" style="line-height: 38px;">Página 1</span>
                     <button id="btn-audit-next" class="button button--secondary" disabled>Siguiente</button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="tab-panel" data-panel="admin-backups" role="tabpanel">
+            <div class="module-layout module-layout--inventory">
+              <section class="module-card">
+                <div class="module-card__header">
+                  <div>
+                    <span class="module-kicker">Seguridad</span>
+                    <h2>Copias de Seguridad</h2>
+                  </div>
+                </div>
+
+                <p class="module-status" id="backup-status" role="status"></p>
+
+                <div class="form-grid" style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+                  <div class="card-subgroup" style="padding: 1.5rem; background: var(--pastel-green-1); border: 1px solid var(--border); border-radius: 12px;">
+                    <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; color: #24453a;"><i class="ti ti-download" style="color: var(--accent);"></i> Exportar Datos (Crear Backup)</h3>
+                    <p style="color: var(--muted); margin-bottom: 1.25rem;">
+                      Guarda una copia de seguridad completa del estado actual de tu base de datos (ventas, inventario, trabajadores, etc.) en un archivo local en tu ordenador.
+                    </p>
+                    <button class="button button--primary" id="btn-export-backup" type="button" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                      <i class="ti ti-database-export"></i> Crear y Guardar Copia
+                    </button>
+                  </div>
+
+                  <div class="card-subgroup" style="padding: 1.5rem; background: var(--pastel-green-4); border: 1px solid var(--border); border-radius: 12px;">
+                    <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; color: #24453a;"><i class="ti ti-upload" style="color: var(--danger);"></i> Restaurar Datos (Importar Backup)</h3>
+                    <p style="color: var(--muted); margin-bottom: 1.25rem;">
+                      Selecciona un archivo de copia de seguridad previo para reemplazar toda la información actual de la base de datos.
+                    </p>
+                    <div style="background: rgba(194, 65, 91, 0.1); border: 1px dashed rgba(194, 65, 91, 0.3); color: var(--danger); padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.875rem; margin-bottom: 1.25rem; display: flex; align-items: flex-start; gap: 0.5rem;">
+                      <i class="ti ti-alert-triangle" style="margin-top: 0.15rem; font-size: 1.1rem; flex-shrink: 0;"></i>
+                      <span>
+                        <strong>Advertencia:</strong> Esta acción sobrescribirá por completo todos los datos existentes. Al finalizar la importación exitosa, la aplicación se reiniciará automáticamente.
+                      </span>
+                    </div>
+                    <button class="button button--danger" id="btn-restore-backup" type="button" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                      <i class="ti ti-history"></i> Restaurar Copia anterior
+                    </button>
+                  </div>
+
+                  <div class="card-subgroup" style="padding: 1.5rem; background: var(--pastel-green-5); border: 1px solid var(--border); border-radius: 12px;">
+                    <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; color: #24453a;"><i class="ti ti-refresh" style="color: var(--accent);"></i> Respaldos Automáticos Diarios</h3>
+                    <p style="color: var(--muted); margin-bottom: 0.5rem;">
+                      El sistema realiza automáticamente una copia de seguridad en caliente al iniciarse cada día.
+                    </p>
+                    <ul style="color: var(--muted); padding-left: 1.25rem; font-size: 0.875rem; list-style-type: disc;">
+                      <li>Se guardan en el directorio de datos del usuario de la aplicación.</li>
+                      <li>Para evitar un uso excesivo de disco, solo se mantienen las últimas 5 copias diarias automáticas.</li>
+                    </ul>
                   </div>
                 </div>
               </section>

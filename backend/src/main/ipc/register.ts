@@ -13,9 +13,10 @@ import {
   saveProduct,
   getSalesReport,
 } from '../modules/store'
-import { changePassword, login } from '../modules/auth'
+import { changePassword, login, currentActiveUser } from '../modules/auth'
 import { deleteShift, fetchAuditLogs, resetUserPassword, saveRole, saveShift, saveWorker, setShiftState } from '../modules/admin'
 import { getParallelDollarRate } from '../modules/exchange'
+import { createBackupManual, restoreBackupManual } from '../modules/backup'
 
 function registerHandler(channel: string, handler: Parameters<typeof ipcMain.handle>[1]) {
   ipcMain.removeHandler(channel)
@@ -109,6 +110,20 @@ export function registerSystemIpc(database: Database.Database) {
 
   registerHandler('admin:set-shift-state', (_event, shiftId, enabled) => {
     return setShiftState(database, shiftId, enabled)
+  })
+
+  registerHandler('backup:create-manual', () => {
+    if (!currentActiveUser || (!currentActiveUser.isAdminLike && currentActiveUser.id_usuario !== 1)) {
+      throw new Error('No tienes permiso para realizar esta acción.')
+    }
+    return createBackupManual(database)
+  })
+
+  registerHandler('backup:restore-manual', () => {
+    if (!currentActiveUser || (!currentActiveUser.isAdminLike && currentActiveUser.id_usuario !== 1)) {
+      throw new Error('No tienes permiso para realizar esta acción.')
+    }
+    return restoreBackupManual(database)
   })
 
 }

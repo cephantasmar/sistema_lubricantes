@@ -49,6 +49,8 @@ declare global {
       setShiftState: (shiftId: number, enabled: boolean) => Promise<{ shiftId: number; enabled: boolean }>
       recordAttendance: (payload: AttendanceInput) => Promise<{ attendanceId: number }>
       fetchAuditLogs: (payload: FetchAuditLogsInput) => Promise<FetchAuditLogsResult>
+      createBackup: () => Promise<{ success: boolean; message: string; destPath?: string }>
+      restoreBackup: () => Promise<{ success: boolean; message: string }>
     }
   }
 }

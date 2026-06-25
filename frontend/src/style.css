@@ -2269,7 +2269,7 @@ body {
 .permission-item {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
   font-size: 0.9rem;
@@ -2981,3 +2981,12 @@ body {
 .strength-weak { background-color: var(--danger); }
 .strength-medium { background-color: var(--warning); }
 .strength-strong { background-color: var(--success); }
+
+/* Collapsed Sidebar Accordion Adjustments */
+.sidebar.is-collapsed .accordion-icon {
+  display: none !important;
+}
+
+.sidebar.is-collapsed .accordion-content {
+  display: none !important;
+}
