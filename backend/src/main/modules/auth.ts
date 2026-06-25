@@ -122,7 +122,7 @@ export function getCurrentUserAccess(db: Database.Database) {
 
   return {
     ...access,
-    canViewAllAttendance: access.isAdminLike,
+    canViewAllAttendance: access.isAdminLike || access.permissionNames.includes('VER_ASISTENCIAS'),
   }
 }
 

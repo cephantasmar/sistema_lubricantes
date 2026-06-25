@@ -123,6 +123,7 @@ export function resetUserPassword(db: Database.Database, workerId: number): { su
 }
 
 export function fetchAuditLogs(db: Database.Database, input: FetchAuditLogsInput): FetchAuditLogsResult {
+  requirePermission(db, 'VER_AUDITORIA')
   const { page, limit, modulo, accion, usuario, fechaDesde, fechaHasta } = input
   
   const conditions: string[] = []
@@ -161,8 +162,9 @@ export function fetchAuditLogs(db: Database.Database, input: FetchAuditLogsInput
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const joinClause = `LEFT JOIN usuarios u ON u.id_usuario = l.id_usuario`
   
-  const countStmt = db.prepare(`SELECT COUNT(*) as total FROM auditoria_logs l ${whereClause}`)
+  const countStmt = db.prepare(`SELECT COUNT(*) as total FROM auditoria_logs l ${joinClause} ${whereClause}`)
   const countResult = countStmt.get(...params) as { total: number }
   const totalItems = countResult.total
   const totalPages = Math.ceil(totalItems / limit) || 1
@@ -172,7 +174,7 @@ export function fetchAuditLogs(db: Database.Database, input: FetchAuditLogsInput
   const dataStmt = db.prepare(`
     SELECT l.id_log, COALESCE(u.username, 'Sistema') AS usuario, l.accion, l.modulo, l.descripcion, l.fecha_evento 
     FROM auditoria_logs l 
-    LEFT JOIN usuarios u ON u.id_usuario = l.id_usuario 
+    ${joinClause} 
     ${whereClause}
     ORDER BY l.fecha_evento DESC
     LIMIT ? OFFSET ?
