@@ -97,6 +97,8 @@ export type WorkerRow = {
   estado: string
   creado_en: string
   id_rol?: number | null
+  username?: string | null
+  rol_nombre?: string | null
 }
 
 export type AuditLogRow = {
@@ -108,9 +110,27 @@ export type AuditLogRow = {
   fecha_evento: string
 }
 
+export type FetchAuditLogsInput = {
+  page: number
+  limit: number
+  modulo?: string | null
+  accion?: string | null
+  usuario?: string | null
+  fechaDesde?: string | null
+  fechaHasta?: string | null
+}
+
+export type FetchAuditLogsResult = {
+  logs: AuditLogRow[]
+  totalItems: number
+  totalPages: number
+  currentPage: number
+}
+
 export type AuthResult = {
   success: boolean
   message?: string
+  requiresPasswordChange?: boolean
   user?: {
     id_usuario: number
     username: string
@@ -403,6 +423,15 @@ export type BootstrapData = {
 export type SalesReportInput = {
   startDate: string // YYYY-MM-DD
   endDate: string // YYYY-MM-DD
+  vendedorId?: number | null
+  turnoId?: number | null
+  monedaId?: number | null
+  estado?: string | null
+}
+
+export type ReportHighlight = {
+  label: string
+  value: number
 }
 
 export type SalesReportKPIs = {
@@ -413,6 +442,15 @@ export type SalesReportKPIs = {
   totalDescuentos: number
   cantidadVentas: number
   saldoPendiente: number
+  ticketPromedio: number
+  margenPromedio: number
+  ventasCompletadas: number
+  ventasPendientes: number
+  ventasAnuladas: number
+  pagosRegistrados: number
+  metodosPagoCount: number
+  ventaMasRentable: ReportHighlight | null
+  margenMasBajo: ReportHighlight | null
 }
 
 export type ProfitReportRow = {
@@ -421,46 +459,89 @@ export type ProfitReportRow = {
   fecha_venta: string
   vendedor: string
   cliente: string
+  turno: string
+  moneda: string
+  productos_count: number
+  cantidad_total: number
   subtotal: number
   descuento: number
   total: number
   costo: number
   ganancia: number
   margen: number
+  pagos_recibidos: number
+  saldo_pendiente: number
   estado: string
 }
 
 export type CashFlowReportRow = {
   metodo_pago: string
+  moneda: string
   total_recibido: number
+  transacciones_count: number
+  ventas_count: number
   referencias_count: number
+  sin_referencia_count: number
+}
+
+export type CashFlowSaleRow = {
+  id_venta: number
+  numero_factura: string
+  fecha_venta: string
+  cliente: string
+  vendedor: string
+  turno: string
+  estado: string
+  moneda: string
+  total_vendido: number
+  total_recibido: number
+  saldo_pendiente: number
+  cambio: number
+  metodos_pago: string
 }
 
 export type ChartDataBrand = {
   marca: string
   ventas_count: number
+  unidades: number
   total_vendido: number
+  total_ganancia: number
+  margen: number
 }
 
 export type ChartDataShift = {
   turno: string
   ventas_count: number
   total_vendido: number
+  total_ganancia: number
+  margen: number
+}
+
+export type ChartDataSeller = {
+  vendedor: string
+  ventas_count: number
+  total_vendido: number
+  total_ganancia: number
+  margen: number
 }
 
 export type ChartDataDaily = {
   fecha: string
   total_vendido: number
+  total_costo: number
   total_ganancia: number
+  ventas_count: number
 }
 
 export type SalesReportData = {
   kpis: SalesReportKPIs
   profitReport: ProfitReportRow[]
   cashFlowReport: CashFlowReportRow[]
+  cashFlowBySale: CashFlowSaleRow[]
   charts: {
     brands: ChartDataBrand[]
     shifts: ChartDataShift[]
+    sellers: ChartDataSeller[]
     daily: ChartDataDaily[]
   }
 }

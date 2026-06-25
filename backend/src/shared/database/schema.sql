@@ -48,6 +48,7 @@ CREATE TABLE usuarios (
     username VARCHAR(50) NOT NULL,
     email VARCHAR(120) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    requiere_cambio_password BOOLEAN NOT NULL DEFAULT 1,
     estado VARCHAR(20) NOT NULL,
     ultimo_acceso TIMESTAMP,
     creado_en TIMESTAMP NOT NULL,

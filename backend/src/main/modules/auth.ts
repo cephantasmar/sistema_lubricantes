@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import crypto from 'node:crypto'
 import type { AuthInput, AuthResult } from '../../shared/ipc/contracts'
 
 export type ActiveUser = {
@@ -12,6 +13,21 @@ export type ActiveUser = {
 }
 
 export let currentActiveUser: ActiveUser | null = null
+
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex')
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${hash}`
+}
+
+export function verifyPassword(password: string, storedHash: string): boolean {
+  if (!storedHash.includes(':')) {
+    return password === storedHash
+  }
+  const [salt, hash] = storedHash.split(':')
+  const computedHash = crypto.scryptSync(password, salt, 64).toString('hex')
+  return hash === computedHash
+}
 
 function padDatePart(value: number) {
   return String(value).padStart(2, '0')
@@ -79,7 +95,7 @@ function resolveUserAccess(db: Database.Database, userId: number) {
   const roleNames = roles.map((role) => role.nombre)
   const permissionNames = permissions.map((permission) => permission.nombre)
   const normalizedRoles = roleNames.map(normalizeAccessName)
-  const isAdminLike = normalizedRoles.some((role) => role === 'admin' || role.includes('administrador') || role.includes('gerente'))
+  const isAdminLike = userId === 1 || normalizedRoles.some((role) => role === 'admin' || role === 'administrador' || role === 'gerente')
 
   return {
     roleNames,
@@ -112,7 +128,7 @@ export function getCurrentUserAccess(db: Database.Database) {
 
 export function hasPermission(db: Database.Database, permissionName: string) {
   const access = getCurrentUserAccess(db)
-  return access.isAdminLike || access.permissionNames.includes(permissionName)
+  return getCurrentUserId() === 1 || access.permissionNames.includes(permissionName)
 }
 
 export function requirePermission(db: Database.Database, permissionName: string) {
@@ -147,6 +163,19 @@ export function logAudit(db: Database.Database, accion: string, modulo: string, 
   }
 }
 
+export function changePassword(db: Database.Database, userId: number, newPasswordPlain: string): { success: boolean; message?: string } {
+  try {
+    const hash = hashPassword(newPasswordPlain)
+    db.prepare('UPDATE usuarios SET password_hash = ?, requiere_cambio_password = 0, actualizado_en = ? WHERE id_usuario = ?')
+      .run(hash, localDateTimeSql(), userId)
+    logAudit(db, 'UPDATE', 'usuarios', userId, 'Cambio de contraseña completado')
+    return { success: true }
+  } catch (err) {
+    console.error('changePassword error:', err)
+    return { success: false, message: 'Error al cambiar contraseña' }
+  }
+}
+
 export function login(db: Database.Database, payload: AuthInput): AuthResult {
   try {
     const stmt = db.prepare(`
@@ -154,9 +183,11 @@ export function login(db: Database.Database, payload: AuthInput): AuthResult {
         u.id_usuario, 
         u.username, 
         u.password_hash, 
-        u.estado, 
+        u.requiere_cambio_password,
+        u.estado as usuario_estado, 
         t.id_trabajador, 
-        t.nombres
+        t.nombres,
+        t.estado as trabajador_estado
       FROM usuarios u
       LEFT JOIN trabajadores t ON t.id_usuario = u.id_usuario
       WHERE u.username = ?
@@ -167,13 +198,11 @@ export function login(db: Database.Database, payload: AuthInput): AuthResult {
       return { success: false, message: 'Usuario no encontrado.' }
     }
     
-    if (user.estado !== 'activo') {
-      return { success: false, message: 'Usuario inactivo.' }
+    if (user.usuario_estado !== 'activo' || (user.id_trabajador && user.trabajador_estado !== 'activo')) {
+      return { success: false, message: 'El usuario o trabajador se encuentra inactivo.' }
     }
 
-    // Basic password check since the app is offline and local.
-    // The seed data uses 'password123' as password_hash.
-    if (user.password_hash !== payload.password_plain) {
+    if (!verifyPassword(payload.password_plain, user.password_hash)) {
       return { success: false, message: 'Contraseña incorrecta.' }
     }
 
@@ -191,6 +220,7 @@ export function login(db: Database.Database, payload: AuthInput): AuthResult {
 
     return {
       success: true,
+      requiresPasswordChange: Boolean(user.requiere_cambio_password),
       user: currentActiveUser
     }
   } catch (error) {

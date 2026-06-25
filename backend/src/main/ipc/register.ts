@@ -13,8 +13,8 @@ import {
   saveProduct,
   getSalesReport,
 } from '../modules/store'
-import { login } from '../modules/auth'
-import { deleteShift, saveRole, saveShift, saveWorker, setShiftState } from '../modules/admin'
+import { changePassword, login } from '../modules/auth'
+import { deleteShift, fetchAuditLogs, resetUserPassword, saveRole, saveShift, saveWorker, setShiftState } from '../modules/admin'
 import { getParallelDollarRate } from '../modules/exchange'
 
 function registerHandler(channel: string, handler: Parameters<typeof ipcMain.handle>[1]) {
@@ -85,6 +85,18 @@ export function registerSystemIpc(database: Database.Database) {
 
   registerHandler('admin:save-worker', (_event, payload) => {
     return saveWorker(database, payload)
+  })
+
+  ipcMain.handle('admin:reset-user-password', (_event, workerId) => {
+    return resetUserPassword(database, workerId)
+  })
+
+  ipcMain.handle('auth:change-password', (_event, payload) => {
+    return changePassword(database, payload.userId, payload.newPasswordPlain)
+  })
+
+  ipcMain.handle('admin:fetch-audit-logs', (_event, payload) => {
+    return fetchAuditLogs(database, payload)
   })
 
   registerHandler('admin:save-shift', (_event, payload) => {

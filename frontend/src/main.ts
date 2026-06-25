@@ -1,5 +1,7 @@
 import './style.css'
 import '@tabler/icons-webfont/dist/tabler-icons.css'
+import './notifications.css'
+import { showToast } from './notifications'
 import type {
   AttendanceFormInput,
   AuthInput,
@@ -20,7 +22,7 @@ import type {
   SalesReportData,
 } from '@shared/ipc/contracts'
 
-type TabName = 'home' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'administracion' | 'reportes'
+type TabName = 'home' | 'dashboard' | 'inventario' | 'movimientos' | 'ventas' | 'turnos' | 'administracion' | 'admin-roles' | 'admin-trabajadores' | 'admin-turnos' | 'admin-auditoria' | 'reportes'
 type Semaforo = 'pendiente' | 'verde' | 'amarillo' | 'rojo'
 type InventorySearchField = 'all' | 'codigo' | 'nombre'
 type ThemeName = 'light' | 'dark'
@@ -75,6 +77,7 @@ let landingDismissTimer: number | null = null
 let bootstrapInitialized = false
 let saleSubmissionInProgress = false
 let exchangeRateInterval: number | null = null
+let currentSalesReportData: SalesReportData | null = null
 
 function applyTheme(theme: ThemeName) {
   document.documentElement.dataset.theme = theme
@@ -110,7 +113,7 @@ function initTheme() {
 }
 
 function hasPermission(permissionName: string) {
-  return Boolean(currentUser?.isAdminLike || currentUser?.permissionNames.includes(permissionName))
+  return Boolean(currentUser?.id_usuario === 1 || currentUser?.permissionNames.includes(permissionName))
 }
 
 function hasAnyPermission(permissionNames: string[]) {
@@ -126,14 +129,18 @@ function canAccessTab(tabName: TabName) {
     ventas: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
     turnos: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
     administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES', 'GESTIONAR_TURNOS']),
-    reportes: Boolean(currentUser?.isAdminLike),
+    'admin-roles': hasPermission('GESTIONAR_ROLES'),
+    'admin-trabajadores': hasPermission('GESTIONAR_TRABAJADORES'),
+    'admin-turnos': hasPermission('GESTIONAR_TURNOS'),
+    'admin-auditoria': Boolean(currentUser?.isAdminLike),
+    reportes: hasAnyPermission(['VER_REPORTES', 'GENERAR_REPORTES']),
   }
 
   return accessByTab[tabName]
 }
 
 function getFirstAccessibleTab(): TabName {
-  return (['home', 'dashboard', 'inventario', 'movimientos', 'ventas', 'turnos', 'administracion', 'reportes'] as TabName[]).find(canAccessTab) ?? 'home'
+  return (['home', 'dashboard', 'inventario', 'movimientos', 'ventas', 'turnos', 'admin-roles', 'admin-trabajadores', 'admin-turnos', 'admin-auditoria', 'reportes'] as TabName[]).find(canAccessTab) ?? 'home'
 }
 
 
@@ -142,6 +149,7 @@ function setActiveTab(tabName: TabName) {
 
   document.querySelectorAll<HTMLElement>('.tabs__button[data-tab]').forEach((button) => {
     const buttonTab = button.dataset.tab as TabName | undefined
+    if (buttonTab === ('administracion-group' as any)) return
     const allowed = buttonTab ? canAccessTab(buttonTab) : false
     const isActive = allowed && buttonTab === nextTab
     button.hidden = !allowed
@@ -156,6 +164,17 @@ function setActiveTab(tabName: TabName) {
     panel.toggleAttribute('aria-hidden', !allowed)
     panel.classList.toggle('is-active', allowed && panelTab === nextTab)
   })
+
+  // Auto-expand accordion if active tab is a sub-tab
+  const isSubTab = ['admin-roles', 'admin-trabajadores', 'admin-turnos', 'admin-auditoria'].includes(nextTab)
+  if (isSubTab) {
+    const toggle = document.getElementById('admin-accordion-toggle')
+    const content = document.getElementById('admin-accordion-content')
+    if (toggle && content) {
+      toggle.setAttribute('aria-expanded', 'true')
+      content.style.display = 'flex'
+    }
+  }
 
   if (tabName === 'ventas') {
     setTimeout(() => {
@@ -208,6 +227,86 @@ function getSaleSubtotal() {
   return roundMoney(
     Array.from(saleCart.values()).reduce((sum, item) => sum + Number(item.product.precio_venta) * item.cantidad, 0),
   )
+}
+
+function getSaleFinancialSnapshot() {
+  const saleForm = document.querySelector<HTMLFormElement>('#sale-form')
+  const discountInput = document.querySelector<HTMLInputElement>('#sale-form input[name="descuento_total"]')
+  const idMonedaSale = Number((saleForm?.elements.namedItem('id_moneda') as HTMLSelectElement | null)?.value ?? 1)
+  const saleCurrencyObj = bootstrapData?.references.monedas.find((currency) => currency.id === idMonedaSale)
+  const saleCurrencyCode = saleCurrencyObj ? saleCurrencyObj.nombre.split(' - ')[0] : 'BOB'
+  const subtotal = getSaleSubtotal()
+  const discountManual = roundMoney(Number(discountInput?.value ?? 0))
+  const discountLines = roundMoney(
+    Array.from(saleCart.values()).reduce((sum, item) => sum + (item.descuento_unitario ?? 0) * item.cantidad, 0),
+  )
+  const discountTotal = roundMoney(discountLines + discountManual)
+  const validDiscountTotal = Number.isFinite(discountTotal) && discountTotal >= 0 ? Math.min(discountTotal, subtotal) : 0
+  const total = roundMoney(subtotal - validDiscountTotal)
+
+  let paid = 0
+  salePayments.forEach((payment) => {
+    const ratePayment = getLocalCurrencyRate(payment.id_moneda)
+    const rateSale = getLocalCurrencyRate(idMonedaSale)
+    paid = roundMoney(paid + (payment.monto * ratePayment) / rateSale)
+  })
+
+  return {
+    saleCurrencyCode,
+    subtotal,
+    discountLines,
+    validDiscountTotal,
+    total,
+    paid,
+    pending: paid >= total ? 0 : roundMoney(total - paid),
+    change: paid > total ? roundMoney(paid - total) : 0,
+  }
+}
+
+function updateSaleGuidance() {
+  const snapshot = getSaleFinancialSnapshot()
+  const hasProducts = saleCart.size > 0
+  const hasPayments = salePayments.length > 0
+  const nextAction = document.querySelector<HTMLElement>('#sale-next-action')
+
+  document.querySelectorAll<HTMLElement>('[data-sale-step]').forEach((step) => {
+    step.classList.remove('is-active', 'is-done')
+  })
+
+  const searchStep = document.querySelector<HTMLElement>('[data-sale-step="buscar"]')
+  const reviewStep = document.querySelector<HTMLElement>('[data-sale-step="revisar"]')
+  const payStep = document.querySelector<HTMLElement>('[data-sale-step="cobrar"]')
+
+  if (!hasProducts) {
+    searchStep?.classList.add('is-active')
+    if (nextAction) nextAction.textContent = 'Busca por codigo, nombre o marca para empezar.'
+    return
+  }
+
+  searchStep?.classList.add('is-done')
+
+  if (!hasPayments) {
+    reviewStep?.classList.add('is-active')
+    if (nextAction) {
+      nextAction.textContent = 'Revisa cantidad y total. Si esta correcto, pulsa Cobrar saldo.'
+    }
+    return
+  }
+
+  if (snapshot.pending > 0) {
+    reviewStep?.classList.add('is-done')
+    payStep?.classList.add('is-active')
+    if (nextAction) {
+      nextAction.textContent = `Registra el pago pendiente: ${snapshot.saleCurrencyCode} ${formatCurrency(snapshot.pending)}.`
+    }
+    return
+  }
+
+  reviewStep?.classList.add('is-done')
+  payStep?.classList.add('is-done', 'is-active')
+  if (nextAction) {
+    nextAction.textContent = 'Todo listo. Confirma la venta para guardarla.'
+  }
 }
 
 function formatDateTime(value: string) {
@@ -534,11 +633,10 @@ function renderHomeQuickActions() {
         description: 'Consulta metricas, ventas y el estado general del negocio.',
       },
       {
-        tab: 'administracion',
+        tab: 'admin-turnos',
         icon: 'ti-clock-cog',
         title: 'Gestionar Turnos',
         description: 'Configura los horarios de trabajo de la temporada.',
-        target: '#shift-management-card',
       },
     )
   } else {
@@ -742,6 +840,72 @@ function renderSelectOptions(select: HTMLSelectElement | null, options: Array<{ 
   select.innerHTML = items.join('')
 }
 
+function renderReportSelectOptions(select: HTMLSelectElement | null, options: Array<{ id: number; nombre: string }>, emptyLabel: string) {
+  if (!select) {
+    return
+  }
+
+  const currentValue = select.value
+  select.innerHTML = [
+    `<option value="">${escapeHtml(emptyLabel)}</option>`,
+    ...options.map((option) => `<option value="${option.id}">${escapeHtml(option.nombre)}</option>`),
+  ].join('')
+
+  if (currentValue && options.some((option) => String(option.id) === currentValue)) {
+    select.value = currentValue
+  }
+}
+
+function renderReportFilterOptions(data: BootstrapData) {
+  renderReportSelectOptions(
+    document.querySelector<HTMLSelectElement>('#report-vendedor-filter'),
+    data.references.trabajadores.map((worker) => ({
+      id: worker.id_trabajador,
+      nombre: worker.nombre_completo ?? `${worker.nombres} ${worker.apellidos}`,
+    })),
+    'Todos',
+  )
+
+  renderReportSelectOptions(
+    document.querySelector<HTMLSelectElement>('#report-turno-filter'),
+    data.references.turnos.map((shift) => ({
+      id: shift.id_turno,
+      nombre: `${shift.nombre} (${shift.hora_inicio} - ${shift.hora_fin})`,
+    })),
+    'Todos',
+  )
+
+  renderReportSelectOptions(document.querySelector<HTMLSelectElement>('#report-moneda-filter'), data.references.monedas, 'Todas')
+  updateReportFilterButton()
+}
+
+function hasActiveReportFilters() {
+  return [
+    '#report-vendedor-filter',
+    '#report-turno-filter',
+    '#report-moneda-filter',
+    '#report-estado-filter',
+  ].some((selector) => Boolean(document.querySelector<HTMLSelectElement>(selector)?.value))
+}
+
+function updateReportFilterButton() {
+  const reportView = document.querySelector<HTMLElement>('[data-panel="reportes"]')
+  const button = document.querySelector<HTMLButtonElement>('#report-filter-toggle')
+  if (!button) return
+
+  const showFilters = Boolean(reportView?.classList.contains('show-report-filters'))
+  const activeFilters = hasActiveReportFilters()
+  button.classList.toggle('has-active-filter', activeFilters)
+
+  if (showFilters) {
+    button.innerHTML = '<i class="ti ti-eye-off"></i> Ocultar filtros'
+  } else {
+    button.innerHTML = activeFilters
+      ? '<i class="ti ti-filter-check"></i> Filtros activos'
+      : '<i class="ti ti-adjustments-horizontal"></i> Filtros'
+  }
+}
+
 function renderShiftSelectOptions(data: BootstrapData) {
   const options = data.references.turnos.map((shift) => ({
     id: shift.id_turno,
@@ -798,6 +962,11 @@ function setClosestCardHidden(selector: string, hidden: boolean) {
 }
 
 function applyAccessControl() {
+  const canAccessRoles = hasPermission('GESTIONAR_ROLES')
+  const canAccessTrabajadores = hasPermission('GESTIONAR_TRABAJADORES')
+  const canAccessTurnos = hasPermission('GESTIONAR_TURNOS')
+  const canAccessAuditoria = Boolean(currentUser?.isAdminLike)
+
   const accessByTab: Record<TabName, boolean> = {
     home: true,
     dashboard: canAccessTab('dashboard'),
@@ -805,17 +974,29 @@ function applyAccessControl() {
     movimientos: canAccessTab('movimientos'),
     ventas: canAccessTab('ventas'),
     turnos: canAccessTab('turnos'),
-    administracion: canAccessTab('administracion'),
+    administracion: false,
+    'admin-roles': canAccessRoles,
+    'admin-trabajadores': canAccessTrabajadores,
+    'admin-turnos': canAccessTurnos,
+    'admin-auditoria': canAccessAuditoria,
     reportes: canAccessTab('reportes'),
   }
 
   document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
     const tabName = button.dataset.tab as TabName | undefined
+    if (tabName === ('administracion-group' as any)) return
     const allowed = tabName ? accessByTab[tabName] : false
     button.hidden = !allowed
     button.toggleAttribute('aria-hidden', !allowed)
     button.disabled = !allowed
   })
+
+  // Group visibility
+  const adminAccordion = document.getElementById('admin-accordion')
+  if (adminAccordion) {
+    const hasAnyAdminAccess = canAccessRoles || canAccessTrabajadores || canAccessTurnos || canAccessAuditoria
+    adminAccordion.hidden = !hasAnyAdminAccess
+  }
 
   document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
     const tabName = panel.dataset.panel as TabName | undefined
@@ -1599,20 +1780,28 @@ function renderWorkersTable(data: BootstrapData) {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#workers-table tbody')
   if (!tableBody) return
   if (data.workers.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay trabajadores registrados.</td></tr>'
+    tableBody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay trabajadores registrados.</td></tr>'
     return
   }
   tableBody.innerHTML = data.workers.map(worker => `
     <tr>
       <td><strong>${escapeHtml(worker.nombres)} ${escapeHtml(worker.apellidos)}</strong></td>
       <td>${escapeHtml(worker.cargo ?? 'No especificado')}</td>
-      <td>${worker.id_usuario ? '<span class="badge badge--soft">Asignado</span>' : '<span class="badge badge--muted">Sin usuario</span>'}</td>
+      <td>${worker.username ? escapeHtml(worker.username) : '<span class="badge badge--muted">Sin usuario</span>'}</td>
+      <td>${worker.rol_nombre ? escapeHtml(worker.rol_nombre) : '<span class="badge badge--muted">Ninguno</span>'}</td>
+      <td>${escapeHtml(worker.creado_en)}</td>
       <td><span class="badge ${worker.estado === 'activo' ? 'badge--success' : 'badge--muted'}">${escapeHtml(worker.estado)}</span></td>
       <td>
-        ${hasPermission('GESTIONAR_TRABAJADORES') ? `<button class="button button--small" type="button" data-worker-edit="${worker.id_trabajador}">Editar</button>` : ''}
+        <div class="row-actions">
+          ${hasPermission('GESTIONAR_TRABAJADORES') ? `
+            <button class="button button--small" type="button" data-worker-edit="${worker.id_trabajador}">Editar</button>
+            ${worker.id_usuario ? `<button class="button button--small button--ghost" type="button" data-worker-reset="${worker.id_trabajador}" title="Restablecer Contraseña"><i class="ti ti-key"></i></button>` : ''}
+          ` : ''}
+        </div>
       </td>
     </tr>
   `).join('')
+  
   tableBody.querySelectorAll<HTMLButtonElement>('[data-worker-edit]').forEach(button => {
     button.addEventListener('click', () => {
       const workerId = Number(button.dataset.workerEdit)
@@ -1620,6 +1809,32 @@ function renderWorkersTable(data: BootstrapData) {
       if (worker) {
         fillWorkerForm(worker)
         setStatus('worker-status', `Editando ${worker.nombres}.`, 'info')
+      }
+    })
+  })
+
+  tableBody.querySelectorAll<HTMLButtonElement>('[data-worker-reset]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const workerId = Number(button.dataset.workerReset)
+      const worker = data.workers.find(w => w.id_trabajador === workerId)
+      if (!worker) return
+      
+      if (!window.confirm(`¿Estas seguro de restablecer la contraseña a "12345" para el usuario ${worker.username}?`)) {
+        return
+      }
+
+      button.disabled = true
+      try {
+        const result = await window.inventoryApi.resetUserPassword(workerId)
+        if (result.success) {
+          alert('Contraseña restablecida correctamente. La nueva contraseña es 12345.')
+        } else {
+          alert(result.message || 'Error al restablecer la contraseña.')
+        }
+      } catch (error) {
+        alert(getFriendlyErrorMessage(error, 'No se pudo restablecer la contraseña.'))
+      } finally {
+        button.disabled = false
       }
     })
   })
@@ -1690,22 +1905,195 @@ function renderShiftsTable(data: BootstrapData) {
 
 }
 
+let currentAuditPage = 1
+const AUDIT_LIMIT = 20
+
+const ACTIONS_BY_MODULE: Record<string, string[]> = {
+  auth: ['LOGIN', 'LOGOUT'],
+  asistencias: ['INSERT', 'UPDATE', 'DELETE'],
+  productos: ['INSERT', 'UPDATE', 'DELETE'],
+  inventario_movimientos: ['INSERT', 'UPDATE', 'DELETE'],
+  ventas: ['INSERT', 'UPDATE', 'DELETE'],
+  roles: ['INSERT', 'UPDATE', 'DELETE'],
+  trabajadores: ['INSERT', 'UPDATE', 'DELETE'],
+  usuarios: ['INSERT', 'UPDATE', 'DELETE'],
+  reportes: ['GENERATE', 'VIEW', 'EXPORT']
+}
+
 function renderAuditTable(data: BootstrapData) {
+  fetchAndRenderAuditLogs()
+  
+  const moduleSelect = document.getElementById('audit-filter-module') as HTMLSelectElement
+  const actionSelect = document.getElementById('audit-filter-action') as HTMLSelectElement
+  const btnFilter = document.getElementById('btn-audit-filter')
+  const btnExport = document.getElementById('btn-audit-export')
+  const btnPrev = document.getElementById('btn-audit-prev')
+  const btnNext = document.getElementById('btn-audit-next')
+  
+  if (moduleSelect && actionSelect && !moduleSelect.dataset.bound) {
+    moduleSelect.dataset.bound = 'true'
+    moduleSelect.addEventListener('change', () => {
+      const mod = moduleSelect.value
+      actionSelect.innerHTML = '<option value="">Todas las acciones</option>'
+      if (mod && ACTIONS_BY_MODULE[mod]) {
+        ACTIONS_BY_MODULE[mod].forEach(act => {
+          const opt = document.createElement('option')
+          opt.value = act
+          opt.textContent = act
+          actionSelect.appendChild(opt)
+        })
+      } else {
+        const defaultActions = ['LOGIN', 'LOGOUT', 'INSERT', 'UPDATE', 'DELETE']
+        defaultActions.forEach(act => {
+          const opt = document.createElement('option')
+          opt.value = act
+          opt.textContent = act
+          actionSelect.appendChild(opt)
+        })
+      }
+    })
+    moduleSelect.dispatchEvent(new Event('change'))
+  }
+
+  if (btnFilter && !btnFilter.dataset.bound) {
+    btnFilter.dataset.bound = 'true'
+    btnFilter.addEventListener('click', () => {
+      currentAuditPage = 1
+      fetchAndRenderAuditLogs()
+    })
+  }
+
+  if (btnExport && !btnExport.dataset.bound) {
+    btnExport.dataset.bound = 'true'
+    btnExport.addEventListener('click', exportAuditLogs)
+  }
+
+  if (btnPrev && !btnPrev.dataset.bound) {
+    btnPrev.dataset.bound = 'true'
+    btnPrev.addEventListener('click', () => {
+      if (currentAuditPage > 1) {
+        currentAuditPage--
+        fetchAndRenderAuditLogs()
+      }
+    })
+  }
+
+  if (btnNext && !btnNext.dataset.bound) {
+    btnNext.dataset.bound = 'true'
+    btnNext.addEventListener('click', () => {
+      currentAuditPage++
+      fetchAndRenderAuditLogs()
+    })
+  }
+}
+
+async function fetchAndRenderAuditLogs() {
+  const moduleSelect = document.querySelector<HTMLSelectElement>('#audit-filter-module')
+  const actionSelect = document.querySelector<HTMLSelectElement>('#audit-filter-action')
+  const userFilter = document.querySelector<HTMLInputElement>('#audit-filter-user')
+  const dateFrom = document.querySelector<HTMLInputElement>('#audit-filter-date-from')
+  const dateTo = document.querySelector<HTMLInputElement>('#audit-filter-date-to')
+  
+  const input = {
+    page: currentAuditPage,
+    limit: AUDIT_LIMIT,
+    modulo: moduleSelect?.value || null,
+    accion: actionSelect?.value || null,
+    usuario: userFilter?.value || null,
+    fechaDesde: dateFrom?.value || null,
+    fechaHasta: dateTo?.value || null
+  }
+
+  try {
+    const result = await window.inventoryApi.fetchAuditLogs(input)
+    renderAuditLogsDynamic(result)
+  } catch (err) {
+    console.error('Error fetching audit logs:', err)
+  }
+}
+
+function renderAuditLogsDynamic(result: any) {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#audit-table tbody')
   if (!tableBody) return
-  if (data.auditLogs.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay eventos registrados.</td></tr>'
-    return
+  
+  if (result.logs.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay eventos registrados que coincidan.</td></tr>'
+  } else {
+    tableBody.innerHTML = result.logs.map((log: any) => `
+      <tr>
+        <td>${escapeHtml(formatDateTime(log.fecha_evento))}</td>
+        <td>${escapeHtml(log.usuario)}</td>
+        <td><span class="badge badge--soft">${escapeHtml(log.modulo)}</span></td>
+        <td><strong>${escapeHtml(log.accion)}</strong></td>
+        <td>${escapeHtml(log.descripcion ?? '')}</td>
+      </tr>
+    `).join('')
   }
-  tableBody.innerHTML = data.auditLogs.map(log => `
-    <tr>
-      <td>${escapeHtml(formatDateTime(log.fecha_evento))}</td>
-      <td>${escapeHtml(log.usuario)}</td>
-      <td><span class="badge badge--soft">${escapeHtml(log.modulo)}</span></td>
-      <td><strong>${escapeHtml(log.accion)}</strong></td>
-      <td>${escapeHtml(log.descripcion ?? '')}</td>
-    </tr>
-  `).join('')
+
+  const infoEl = document.getElementById('audit-pagination-info')
+  const pageEl = document.getElementById('audit-pagination-page')
+  const btnPrev = document.getElementById('btn-audit-prev') as HTMLButtonElement
+  const btnNext = document.getElementById('btn-audit-next') as HTMLButtonElement
+
+  if (infoEl) infoEl.textContent = `Mostrando ${result.totalItems} registros`
+  if (pageEl) pageEl.textContent = `Página ${result.currentPage} de ${result.totalPages}`
+  
+  if (btnPrev) btnPrev.disabled = result.currentPage <= 1
+  if (btnNext) btnNext.disabled = result.currentPage >= result.totalPages
+
+  if (btnPrev && btnPrev.parentElement) {
+    btnPrev.parentElement.style.display = result.totalPages <= 1 ? 'none' : 'flex'
+  }
+  
+  currentAuditPage = result.currentPage
+}
+
+async function exportAuditLogs() {
+  const moduleSelect = document.querySelector<HTMLSelectElement>('#audit-filter-module')
+  const actionSelect = document.querySelector<HTMLSelectElement>('#audit-filter-action')
+  const userFilter = document.querySelector<HTMLInputElement>('#audit-filter-user')
+  const dateFrom = document.querySelector<HTMLInputElement>('#audit-filter-date-from')
+  const dateTo = document.querySelector<HTMLInputElement>('#audit-filter-date-to')
+  
+  const input = {
+    page: 1,
+    limit: 5000,
+    modulo: moduleSelect?.value || null,
+    accion: actionSelect?.value || null,
+    usuario: userFilter?.value || null,
+    fechaDesde: dateFrom?.value || null,
+    fechaHasta: dateTo?.value || null
+  }
+
+  try {
+    const result = await window.inventoryApi.fetchAuditLogs(input)
+    if (result.logs.length === 0) {
+      showToast.warning('No hay datos para exportar.')
+      return
+    }
+    
+    const headers = ['Fecha', 'Usuario', 'Módulo', 'Acción', 'Detalle']
+    const rows = result.logs.map((log: any) => [
+      formatDateTime(log.fecha_evento),
+      log.usuario,
+      log.modulo,
+      log.accion,
+      log.descripcion || ''
+    ])
+    
+    const csvContent = [headers, ...rows].map((row: any[]) => row.map((cell: any) => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n')
+    
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `auditoria_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('Error exportando CSV:', err)
+    showToast.error('Error al exportar.')
+  }
 }
 
 function renderProductSearchResults(query = '') {
@@ -1716,13 +2104,14 @@ function renderProductSearchResults(query = '') {
   }
 
   const normalizedQuery = normalizeSearch(query)
+  if (!normalizedQuery) {
+    container.innerHTML = '<p class="empty-state">Escribe un codigo, nombre o marca para buscar productos.</p>'
+    return
+  }
+
   const products = bootstrapData.products
     .filter((product) => isProductActive(product) && Number(product.stock_actual) > 0)
     .filter((product) => {
-      if (!normalizedQuery) {
-        return true
-      }
-
       return [
         product.codigo,
         product.codigo_barra,
@@ -1943,6 +2332,34 @@ function renderSalePayments() {
 
 function setupPaymentHandlers() {
   const addBtn = document.querySelector<HTMLButtonElement>('#payment-add-btn')
+  const fillTotalBtn = document.querySelector<HTMLButtonElement>('#payment-fill-total')
+
+  fillTotalBtn?.addEventListener('click', () => {
+    const amountInput = document.querySelector<HTMLInputElement>('#payment-amount-input')
+    const currencySelect = document.querySelector<HTMLSelectElement>('#payment-currency-select')
+    const saleCurrencySelect = document.querySelector<HTMLSelectElement>('#sale-form select[name="id_moneda"]')
+
+    if (!amountInput) {
+      return
+    }
+
+    const snapshot = getSaleFinancialSnapshot()
+    if (snapshot.total <= 0) {
+      document.querySelector<HTMLInputElement>('#sale-product-search')?.focus()
+      setStatus('sale-status', 'Primero agrega un producto a la venta.', 'info')
+      return
+    }
+
+    if (currencySelect && saleCurrencySelect) {
+      currencySelect.value = saleCurrencySelect.value
+    }
+
+    amountInput.value = String(snapshot.pending || snapshot.total)
+    amountInput.focus()
+    amountInput.select()
+    setStatus('sale-status', 'Monto listo para cobrar. Pulsa Registrar pago.', 'info')
+  })
+
   if (!addBtn) return
 
   addBtn.addEventListener('click', () => {
@@ -1994,24 +2411,11 @@ function setupPaymentHandlers() {
 
 function renderSaleCart() {
   const tableBody = document.querySelector<HTMLTableSectionElement>('#sale-cart-table tbody')
-  const discountInput = document.querySelector<HTMLInputElement>('#sale-form input[name="descuento_total"]')
   const saleForm = document.querySelector<HTMLFormElement>('#sale-form')
   if (!saleForm) return
 
-  const saleCurrencySelect = saleForm.elements.namedItem('id_moneda') as HTMLSelectElement
-  const idMonedaSale = Number(saleCurrencySelect?.value ?? 1)
-  const saleCurrencyObj = bootstrapData?.references.monedas.find(m => m.id === idMonedaSale)
-  const saleCurrencyCode = saleCurrencyObj ? saleCurrencyObj.nombre.split(' - ')[0] : 'BOB'
-
-  const subtotal = getSaleSubtotal()
-  const discountManual = roundMoney(Number(discountInput?.value ?? 0))
-  const discountLines = roundMoney(
-    Array.from(saleCart.values()).reduce((sum, item) => sum + (item.descuento_unitario ?? 0) * item.cantidad, 0)
-  )
-
-  const discountTotal = roundMoney(discountLines + discountManual)
-  const validDiscountTotal = Number.isFinite(discountTotal) && discountTotal >= 0 ? Math.min(discountTotal, subtotal) : 0
-  const total = roundMoney(subtotal - validDiscountTotal)
+  const snapshot = getSaleFinancialSnapshot()
+  const { saleCurrencyCode, subtotal, validDiscountTotal, total } = snapshot
 
   // Track focused element before rendering
   let activeElementInfo: { productId: number; field: 'quantity' | 'discount'; selectionStart: number | null; selectionEnd: number | null } | null = null
@@ -2029,7 +2433,7 @@ function renderSaleCart() {
 
   if (tableBody) {
     const cartItems = Array.from(saleCart.values())
-    const minRows = 5
+    const minRows = cartItems.length
     const rowsToRender: string[] = []
 
     cartItems.forEach((item, index) => {
@@ -2051,12 +2455,12 @@ function renderSaleCart() {
             )}" value="${escapeHtml(item.cantidad)}" data-cart-quantity="${item.product.id_producto}" style="text-align: right; width: 100%; height: 100%; border: none; padding: 11px; background: transparent; outline: none;" />
           </td>
           <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(Number(item.product.precio_venta)))}</td>
-          <td class="excel-cell-input" style="padding: 0; vertical-align: middle;">
+          <td class="excel-cell-input sale-advanced-col" style="padding: 0; vertical-align: middle;">
             <input class="cart-discount excel-input" type="number" step="0.01" min="0" max="${escapeHtml(
               item.product.precio_venta,
             )}" value="${escapeHtml(item.descuento_unitario ?? 0)}" data-cart-discount="${item.product.id_producto}" style="text-align: right; width: 100%; height: 100%; border: none; padding: 11px; background: transparent; outline: none;" />
           </td>
-          <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(subtotalLine))}</td>
+          <td class="sale-advanced-col" style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(subtotalLine))}</td>
           <td style="text-align: right; vertical-align: middle;">${escapeHtml(formatCurrency(totalLine))}</td>
           <td style="text-align: center; vertical-align: middle;"><button class="button button--small" type="button" data-cart-remove="${item.product.id_producto}">Eliminar</button></td>
         </tr>
@@ -2080,7 +2484,16 @@ function renderSaleCart() {
       `)
     }
 
-    tableBody.innerHTML = rowsToRender.join('')
+    tableBody.innerHTML = cartItems.length === 0
+      ? `
+        <tr>
+          <td colspan="9" class="sale-cart-empty">
+            <strong>Busca un producto para iniciar la venta.</strong>
+            <small>La venta se arma aqui automaticamente. Despues registra el pago y guarda.</small>
+          </td>
+        </tr>
+      `
+      : rowsToRender.join('')
 
     // Set change and keyboard navigation events
     tableBody.querySelectorAll<HTMLInputElement>('[data-cart-quantity]').forEach((input) => {
@@ -2158,21 +2571,9 @@ function renderSaleCart() {
     }
   }
 
-  let totalPagadoInSaleCurrency = 0
-  salePayments.forEach((pago) => {
-    const rateP = getLocalCurrencyRate(pago.id_moneda)
-    const rateS = getLocalCurrencyRate(idMonedaSale)
-    const montoInSaleCurrency = roundMoney((pago.monto * rateP) / rateS)
-    totalPagadoInSaleCurrency = roundMoney(totalPagadoInSaleCurrency + montoInSaleCurrency)
-  })
-
-  let saldoPendiente = 0
-  let cambio = 0
-  if (totalPagadoInSaleCurrency >= total) {
-    cambio = roundMoney(totalPagadoInSaleCurrency - total)
-  } else {
-    saldoPendiente = roundMoney(total - totalPagadoInSaleCurrency)
-  }
+  const totalPagadoInSaleCurrency = snapshot.paid
+  const saldoPendiente = snapshot.pending
+  const cambio = snapshot.change
 
   document.querySelector<HTMLElement>('#sale-summary-products')!.textContent = String(saleCart.size)
   document.querySelector<HTMLElement>('#sale-summary-units')!.textContent = formatCurrency(
@@ -2185,6 +2586,7 @@ function renderSaleCart() {
   document.querySelector<HTMLElement>('#sale-paid-output')!.textContent = `${saleCurrencyCode} ${formatCurrency(totalPagadoInSaleCurrency)}`
   document.querySelector<HTMLElement>('#sale-pending-output')!.textContent = `${saleCurrencyCode} ${formatCurrency(saldoPendiente)}`
   document.querySelector<HTMLElement>('#sale-change-output')!.textContent = `${saleCurrencyCode} ${formatCurrency(cambio)}`
+  updateSaleGuidance()
 }
 
 function fillProductForm(product: BootstrapData['products'][number]) {
@@ -2226,6 +2628,12 @@ function fillRoleForm(role: BootstrapData['roles'][number]) {
   if (!form) return
   roleFormState.id_rol = role.id_rol
   ;(form.elements.namedItem('id_rol') as HTMLInputElement).value = String(role.id_rol)
+
+  const title = document.getElementById('role-form-title')
+  if (title) title.textContent = 'Editar Rol'
+  const formView = document.getElementById('roles-form-view')
+  if (formView) formView.style.display = 'flex'
+
   ;(form.elements.namedItem('nombre') as HTMLInputElement).value = role.nombre
   ;(form.elements.namedItem('descripcion') as HTMLTextAreaElement).value = role.descripcion ?? ''
   ;(form.elements.namedItem('estado') as HTMLInputElement).checked = Boolean(role.estado)
@@ -2258,6 +2666,12 @@ function fillWorkerForm(worker: BootstrapData['workers'][number]) {
   if (!form) return
   workerFormState.id_trabajador = worker.id_trabajador
   ;(form.elements.namedItem('id_trabajador') as HTMLInputElement).value = String(worker.id_trabajador)
+
+  const title = document.getElementById('worker-form-title')
+  if (title) title.textContent = 'Editar Trabajador'
+  const formView = document.getElementById('workers-form-view')
+  if (formView) formView.style.display = 'flex'
+
   ;(form.elements.namedItem('nombres') as HTMLInputElement).value = worker.nombres
   ;(form.elements.namedItem('apellidos') as HTMLInputElement).value = worker.apellidos
   ;(form.elements.namedItem('cedula') as HTMLInputElement).value = worker.cedula ?? ''
@@ -2314,6 +2728,15 @@ function setStatus(targetId: string, message: string, kind: 'info' | 'success' |
   target.textContent = message
   target.dataset.kind = kind
 
+  if (message) {
+    if (kind === 'error') {
+      showToast.error(message)
+    } else if (kind === 'success') {
+      showToast.success(message)
+    } else {
+      showToast.info(message)
+    }
+  }
 }
 
 function getFriendlyErrorMessage(error: unknown, fallback: string) {
@@ -2385,6 +2808,7 @@ async function refresh() {
   renderAppInfo(bootstrapData)
   applyAccessControl()
   renderProductFormOptions(bootstrapData)
+  renderReportFilterOptions(bootstrapData)
   renderWorkerRoleSelect(bootstrapData)
   renderPermissionsCheckboxes(bootstrapData)
   renderProductsTable(bootstrapData)
@@ -2450,6 +2874,17 @@ async function bootstrap() {
   const clientSelect = saleForm?.elements.namedItem('id_cliente') as HTMLSelectElement | null
   const clientEditButton = document.querySelector<HTMLButtonElement>('#client-edit-btn')
   let editingClientId: number | null = null
+
+  document.querySelector<HTMLButtonElement>('#sale-advanced-toggle')?.addEventListener('click', (event) => {
+    const button = event.currentTarget as HTMLButtonElement
+    const show = !saleForm?.classList.contains('show-advanced-sale')
+
+    saleForm?.classList.toggle('show-advanced-sale', show)
+    button.setAttribute('aria-pressed', String(show))
+    button.innerHTML = show
+      ? '<i class="ti ti-eye-off"></i> Ocultar opciones'
+      : '<i class="ti ti-adjustments-horizontal"></i> Opciones'
+  })
 
   const updateClientEditButton = () => {
     if (clientEditButton) clientEditButton.disabled = Number(clientSelect?.value ?? 0) <= 0
@@ -3000,10 +3435,21 @@ async function bootstrap() {
     }
   })
 
-  document.querySelector<HTMLButtonElement>('#role-form-reset')?.addEventListener('click', () => {
+  document.querySelector<HTMLButtonElement>('#btn-new-role')?.addEventListener('click', () => {
     resetRoleForm()
+    const title = document.getElementById('role-form-title')
+    if (title) title.textContent = 'Crear Nuevo Rol'
     setStatus('role-status', 'Formulario listo para un nuevo rol.', 'info')
+    const formView = document.getElementById('roles-form-view')
+    if (formView) formView.style.display = 'flex'
   })
+
+  document.querySelector<HTMLButtonElement>('#btn-cancel-role')?.addEventListener('click', () => {
+    const formView = document.getElementById('roles-form-view')
+    if (formView) formView.style.display = 'none'
+    resetRoleForm()
+  })
+
   roleForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
     if (!hasPermission('GESTIONAR_ROLES')) {
@@ -3024,15 +3470,28 @@ async function bootstrap() {
       setStatus('role-status', 'Rol guardado correctamente.', 'success')
       resetRoleForm()
       await refresh()
+      const formView = document.getElementById('roles-form-view')
+      if (formView) formView.style.display = 'none'
     } catch (error) {
       setStatus('role-status', error instanceof Error ? error.message : 'Error al guardar.', 'error')
     }
   })
 
-  document.querySelector<HTMLButtonElement>('#worker-form-reset')?.addEventListener('click', () => {
+  document.querySelector<HTMLButtonElement>('#btn-new-worker')?.addEventListener('click', () => {
     resetWorkerForm()
+    const title = document.getElementById('worker-form-title')
+    if (title) title.textContent = 'Crear Nuevo Trabajador'
     setStatus('worker-status', 'Formulario listo para un nuevo trabajador.', 'info')
+    const formView = document.getElementById('workers-form-view')
+    if (formView) formView.style.display = 'flex'
   })
+
+  document.querySelector<HTMLButtonElement>('#btn-cancel-worker')?.addEventListener('click', () => {
+    const formView = document.getElementById('workers-form-view')
+    if (formView) formView.style.display = 'none'
+    resetWorkerForm()
+  })
+
   workerForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
     if (!hasPermission('GESTIONAR_TRABAJADORES')) {
@@ -3056,6 +3515,8 @@ async function bootstrap() {
       setStatus('worker-status', 'Trabajador guardado correctamente.', 'success')
       resetWorkerForm()
       await refresh()
+      const formView = document.getElementById('workers-form-view')
+      if (formView) formView.style.display = 'none'
     } catch (error) {
       setStatus('worker-status', error instanceof Error ? error.message : 'Error al guardar.', 'error')
     }
@@ -3131,8 +3592,18 @@ async function bootstrap() {
 
   document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((button) => {
     button.addEventListener('click', () => {
-      const tabName = button.dataset.tab as TabName | undefined
-      if (tabName) setActiveTab(tabName)
+      const tabName = button.dataset.tab as TabName | string | undefined
+      if (tabName === 'administracion-group') {
+        const toggle = document.getElementById('admin-accordion-toggle')
+        const content = document.getElementById('admin-accordion-content')
+        if (toggle && content) {
+          const isExpanded = toggle.getAttribute('aria-expanded') === 'true'
+          toggle.setAttribute('aria-expanded', (!isExpanded).toString())
+          content.style.display = isExpanded ? 'none' : 'flex'
+        }
+        return
+      }
+      if (tabName) setActiveTab(tabName as TabName)
     })
   })
 
@@ -3191,6 +3662,52 @@ async function bootstrap() {
   // Reportes tab handlers
   document.querySelector<HTMLButtonElement>('#report-generate-btn')?.addEventListener('click', () => {
     void loadSalesReportData()
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('[data-report-range]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const preset = button.dataset.reportRange as ReportRangePreset | undefined
+      if (preset === 'today' || preset === 'week' || preset === 'month') {
+        setReportDateRange(preset)
+      }
+    })
+  })
+
+  document.querySelectorAll<HTMLInputElement>('#report-start-date, #report-end-date').forEach((input) => {
+    input.addEventListener('change', syncReportPresetButtons)
+  })
+
+  document.querySelectorAll<HTMLSelectElement>(
+    '#report-vendedor-filter, #report-turno-filter, #report-moneda-filter, #report-estado-filter',
+  ).forEach((select) => {
+    select.addEventListener('change', updateReportFilterButton)
+  })
+
+  document.querySelector<HTMLButtonElement>('#report-filter-toggle')?.addEventListener('click', (event) => {
+    const reportView = document.querySelector<HTMLElement>('[data-panel="reportes"]')
+    const button = event.currentTarget as HTMLButtonElement
+    const show = !reportView?.classList.contains('show-report-filters')
+
+    reportView?.classList.toggle('show-report-filters', show)
+    button.setAttribute('aria-pressed', String(show))
+    updateReportFilterButton()
+  })
+
+  document.querySelector<HTMLButtonElement>('#report-detail-toggle')?.addEventListener('click', (event) => {
+    const reportView = document.querySelector<HTMLElement>('[data-panel="reportes"]')
+    const button = event.currentTarget as HTMLButtonElement
+    const show = !reportView?.classList.contains('show-report-detail')
+
+    reportView?.classList.toggle('show-report-detail', show)
+    button.setAttribute('aria-pressed', String(show))
+    button.innerHTML = show
+      ? '<i class="ti ti-eye-off"></i> detalle'
+      : '<i class="ti ti-list-details"></i> Detalle'
+
+    if (show && currentSalesReportData) {
+      const reportData = currentSalesReportData
+      window.requestAnimationFrame(() => renderSalesReportCharts(reportData))
+    }
   })
 
   document.querySelectorAll<HTMLButtonElement>('.report-subtab-btn').forEach((btn) => {
@@ -3288,7 +3805,7 @@ async function openSaleDetailModal(saleId: number) {
     `
     modal.style.display = 'block'
   } catch (error) {
-    alert(error instanceof Error ? error.message : 'No se pudo obtener el detalle de la venta.')
+    showToast.error(error instanceof Error ? error.message : 'No se pudo obtener el detalle de la venta.')
   }
 }
 
@@ -3323,6 +3840,13 @@ function initLogin() {
       })
       if (result.success) {
         currentUser = result.user ?? null
+
+        if (result.requiresPasswordChange) {
+          document.getElementById('login-overlay')!.style.display = 'none'
+          document.getElementById('password-change-overlay')!.style.display = 'flex'
+          return
+        }
+
         document.getElementById('login-overlay')!.style.display = 'none'
         document.getElementById('main-app')!.style.display = 'block'
         setActiveTab('home')
@@ -3334,6 +3858,91 @@ function initLogin() {
       setStatus('login-status', 'Error de conexión con el backend', 'error')
     }
   })
+
+  const passwordChangeForm = document.getElementById('password-change-form') as HTMLFormElement | null
+  const newPasswordInput = document.getElementById('new-password-input') as HTMLInputElement | null
+  const passwordStrengthProgress = document.getElementById('password-strength-progress')
+  const passwordStrengthText = document.getElementById('password-strength-text')
+  const passwordChangeSubmit = document.getElementById('password-change-submit') as HTMLButtonElement | null
+
+  newPasswordInput?.addEventListener('input', (e) => {
+    const val = (e.target as HTMLInputElement).value
+    let strength = 0
+    if (val.length >= 8) strength += 1
+    if (/[A-Z]/.test(val)) strength += 1
+    if (/[0-9]/.test(val)) strength += 1
+    if (/[^A-Za-z0-9]/.test(val)) strength += 1
+
+    if (passwordStrengthProgress && passwordStrengthText && passwordChangeSubmit) {
+      passwordStrengthProgress.className = 'password-strength-progress'
+      if (val.length === 0) {
+        passwordStrengthProgress.style.width = '0%'
+        passwordStrengthText.textContent = 'La contraseña debe tener al menos 8 caracteres'
+        passwordChangeSubmit.disabled = true
+      } else if (strength <= 1) {
+        passwordStrengthProgress.style.width = '33%'
+        passwordStrengthProgress.classList.add('strength-weak')
+        passwordStrengthText.textContent = 'Débil (usa mayúsculas, números y símbolos)'
+        passwordChangeSubmit.disabled = val.length < 8
+      } else if (strength === 2 || strength === 3) {
+        passwordStrengthProgress.style.width = '66%'
+        passwordStrengthProgress.classList.add('strength-medium')
+        passwordStrengthText.textContent = 'Buena (añade más variedad para que sea fuerte)'
+        passwordChangeSubmit.disabled = false
+      } else {
+        passwordStrengthProgress.style.width = '100%'
+        passwordStrengthProgress.classList.add('strength-strong')
+        passwordStrengthText.textContent = 'Fuerte'
+        passwordChangeSubmit.disabled = false
+      }
+    }
+  })
+
+  passwordChangeForm?.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    if (!currentUser) return
+
+    const formData = new FormData(passwordChangeForm)
+    const newPassword = String(formData.get('new_password') ?? '')
+    const confirmPassword = String(formData.get('confirm_password') ?? '')
+
+    if (newPassword !== confirmPassword) {
+      setStatus('password-change-status', 'Las contraseñas no coinciden', 'error')
+      return
+    }
+
+    if (newPassword.length < 8) {
+      setStatus('password-change-status', 'La contraseña debe tener al menos 8 caracteres', 'error')
+      return
+    }
+
+    try {
+      const result = await window.inventoryApi.changePassword({ userId: currentUser.id_usuario, newPasswordPlain: newPassword })
+      if (result.success) {
+        passwordChangeForm.reset()
+        if (passwordStrengthProgress) passwordStrengthProgress.style.width = '0%'
+        if (passwordStrengthText) passwordStrengthText.textContent = 'La contraseña debe tener al menos 8 caracteres'
+        if (passwordChangeSubmit) passwordChangeSubmit.disabled = true
+        document.getElementById('password-change-overlay')!.style.display = 'none'
+        document.getElementById('main-app')!.style.display = 'block'
+        setActiveTab('home')
+        void bootstrap()
+      } else {
+        setStatus('password-change-status', result.message ?? 'Error al actualizar', 'error')
+      }
+    } catch (err) {
+      setStatus('password-change-status', 'Error de conexión', 'error')
+    }
+  })
+
+  document.getElementById('cancel-password-change')?.addEventListener('click', () => {
+    currentUser = null
+    passwordChangeForm?.reset()
+    loginForm?.reset()
+    document.getElementById('password-change-overlay')!.style.display = 'none'
+    document.getElementById('login-overlay')!.style.display = 'flex'
+  })
+
   const logoutBtn = document.getElementById('logout-btn')
   logoutBtn?.addEventListener('click', () => {
     currentUser = null
@@ -3349,28 +3958,115 @@ function initLogin() {
     const loginForm = document.getElementById('login-form') as HTMLFormElement | null
     loginForm?.reset()
     document.getElementById('main-app')!.style.display = 'none'
+    document.getElementById('password-change-overlay')!.style.display = 'none'
     document.getElementById('login-overlay')!.style.display = 'flex'
     sidebar?.classList.remove('is-collapsed')
   })
+}
+
+type ReportRangePreset = 'today' | 'week' | 'month'
+
+function toDateInputValue(date: Date) {
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function setReportPresetActive(preset: ReportRangePreset | null) {
+  document.querySelectorAll<HTMLButtonElement>('[data-report-range]').forEach((button) => {
+    button.classList.toggle('is-active', button.dataset.reportRange === preset)
+  })
+}
+
+function detectReportPreset(startDate: string, endDate: string): ReportRangePreset | null {
+  const today = new Date()
+  const todayValue = toDateInputValue(today)
+  const weekStart = new Date(today)
+  weekStart.setDate(today.getDate() - 6)
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+
+  if (startDate === todayValue && endDate === todayValue) return 'today'
+  if (startDate === toDateInputValue(weekStart) && endDate === todayValue) return 'week'
+  if (startDate === toDateInputValue(monthStart) && endDate === todayValue) return 'month'
+  return null
+}
+
+function syncReportPresetButtons() {
+  const startDate = document.querySelector<HTMLInputElement>('#report-start-date')?.value ?? ''
+  const endDate = document.querySelector<HTMLInputElement>('#report-end-date')?.value ?? ''
+  setReportPresetActive(detectReportPreset(startDate, endDate))
+}
+
+function setReportDateRange(preset: ReportRangePreset, shouldLoad = true) {
+  const startDateInput = document.querySelector<HTMLInputElement>('#report-start-date')
+  const endDateInput = document.querySelector<HTMLInputElement>('#report-end-date')
+  if (!startDateInput || !endDateInput) return
+
+  const today = new Date()
+  const startDate = new Date(today)
+
+  if (preset === 'week') {
+    startDate.setDate(today.getDate() - 6)
+  } else if (preset === 'month') {
+    startDate.setDate(1)
+  }
+
+  startDateInput.value = toDateInputValue(startDate)
+  endDateInput.value = toDateInputValue(today)
+  setReportPresetActive(preset)
+
+  if (shouldLoad) {
+    void loadSalesReportData()
+  }
 }
 
 function initReportDates() {
   const startDateInput = document.querySelector<HTMLInputElement>('#report-start-date')
   const endDateInput = document.querySelector<HTMLInputElement>('#report-end-date')
   if (startDateInput && !startDateInput.value) {
-    const today = new Date()
-    const yyyy = today.getFullYear()
-    const mm = String(today.getMonth() + 1).padStart(2, '0')
-    const dd = String(today.getDate()).padStart(2, '0')
-    startDateInput.value = `${yyyy}-${mm}-${dd}`
+    startDateInput.value = toDateInputValue(new Date())
   }
   if (endDateInput && !endDateInput.value) {
-    const today = new Date()
-    const yyyy = today.getFullYear()
-    const mm = String(today.getMonth() + 1).padStart(2, '0')
-    const dd = String(today.getDate()).padStart(2, '0')
-    endDateInput.value = `${yyyy}-${mm}-${dd}`
+    endDateInput.value = toDateInputValue(new Date())
   }
+  syncReportPresetButtons()
+}
+
+function readOptionalReportId(selector: string) {
+  const value = document.querySelector<HTMLSelectElement>(selector)?.value
+  if (!value) {
+    return null
+  }
+
+  const numberValue = Number(value)
+  return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null
+}
+
+function setElementText(selector: string, text: string) {
+  const element = document.querySelector<HTMLElement>(selector)
+  if (element) {
+    element.textContent = text
+  }
+}
+
+function formatMoneyWithCurrency(value: number, currency = 'BOB') {
+  const prefix = currency === 'BOB' ? 'Bs' : currency
+  return `${prefix} ${formatCurrency(value)}`
+}
+
+function renderSalesReportCharts(reportData: SalesReportData) {
+  renderBrandChart('brand-chart-container', reportData.charts.brands)
+  renderShiftChart('shift-chart-container', reportData.charts.shifts)
+  renderSellerChart('seller-chart-container', reportData.charts.sellers)
+  renderDailyTrendChart('daily-chart-container', reportData.charts.daily)
+}
+
+function getStatusBadgeClass(status: string) {
+  const normalized = status.toUpperCase()
+  if (normalized === 'COMPLETADA') return 'badge--success'
+  if (normalized === 'ANULADA') return 'badge--muted'
+  return 'badge--soft'
 }
 
 async function loadSalesReportData() {
@@ -3381,98 +4077,187 @@ async function loadSalesReportData() {
   const startDate = startDateInput.value
   const endDate = endDateInput.value
   if (!startDate || !endDate) return
+  syncReportPresetButtons()
+  if (startDate > endDate) {
+    setStatus('report-status', 'La fecha inicial no puede ser mayor que la fecha final.', 'error')
+    return
+  }
 
   const btn = document.querySelector<HTMLButtonElement>('#report-generate-btn')
   if (btn) {
     btn.disabled = true
-    btn.textContent = 'Cargando...'
+    btn.innerHTML = '<i class="ti ti-loader-2"></i> Generando'
   }
 
   try {
-    const reportData = await window.inventoryApi.getSalesReport({ startDate, endDate })
+    const estado = document.querySelector<HTMLSelectElement>('#report-estado-filter')?.value || null
+    const payload: SalesReportInput = {
+      startDate,
+      endDate,
+      vendedorId: readOptionalReportId('#report-vendedor-filter'),
+      turnoId: readOptionalReportId('#report-turno-filter'),
+      monedaId: readOptionalReportId('#report-moneda-filter'),
+      estado,
+    }
+    const reportData = await window.inventoryApi.getSalesReport(payload)
+    currentSalesReportData = reportData
 
-    // Render KPIs
-    document.querySelector('#kpi-total-vendido')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalVendido)}`
-    document.querySelector('#kpi-total-costo')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalCosto)}`
-    document.querySelector('#kpi-total-ganancia')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalGanancia)}`
-    document.querySelector('#kpi-total-cobrado')!.textContent = `Bs ${formatCurrency(reportData.kpis.totalCobrado)}`
-    document.querySelector('#kpi-saldo-pendiente')!.textContent = `Bs ${formatCurrency(reportData.kpis.saldoPendiente)}`
+    setStatus(
+      'report-status',
+      reportData.kpis.cantidadVentas > 0
+        ? `Reporte generado para ${reportData.kpis.cantidadVentas} ventas.`
+        : 'No hay ventas para los filtros seleccionados.',
+      reportData.kpis.cantidadVentas > 0 ? 'success' : 'info',
+    )
 
-    // Update sales count badge
-    document.querySelector('#report-sales-count')!.textContent = `${reportData.kpis.cantidadVentas} ventas`
+    setElementText('#kpi-total-vendido', formatMoneyWithCurrency(reportData.kpis.totalVendido))
+    setElementText('#kpi-total-costo', formatMoneyWithCurrency(reportData.kpis.totalCosto))
+    setElementText('#kpi-total-ganancia', formatMoneyWithCurrency(reportData.kpis.totalGanancia))
+    setElementText('#kpi-total-cobrado', formatMoneyWithCurrency(reportData.kpis.totalCobrado))
+    setElementText('#kpi-saldo-pendiente', formatMoneyWithCurrency(reportData.kpis.saldoPendiente))
+    setElementText('#kpi-total-descuentos', formatMoneyWithCurrency(reportData.kpis.totalDescuentos))
+    setElementText('#kpi-ticket-promedio', formatMoneyWithCurrency(reportData.kpis.ticketPromedio))
+    setElementText('#kpi-margen-promedio', `${formatCurrency(reportData.kpis.margenPromedio)}%`)
+    setElementText('#kpi-ventas-pendientes', String(reportData.kpis.ventasPendientes))
+    setElementText('#report-sales-count', `${reportData.kpis.cantidadVentas} ventas`)
+    setElementText('#report-cash-count', `${reportData.kpis.pagosRegistrados} pagos`)
+    setElementText(
+      '#report-best-sale',
+      reportData.kpis.ventaMasRentable
+        ? `Venta mas rentable: ${reportData.kpis.ventaMasRentable.label} (${formatMoneyWithCurrency(reportData.kpis.ventaMasRentable.value)})`
+        : 'Venta mas rentable: sin datos',
+    )
+    setElementText(
+      '#report-low-margin',
+      reportData.kpis.margenMasBajo
+        ? `Margen mas bajo: ${reportData.kpis.margenMasBajo.label} (${formatCurrency(reportData.kpis.margenMasBajo.value)}%)`
+        : 'Margen mas bajo: sin datos',
+    )
+    setElementText(
+      '#report-payment-count',
+      `${reportData.kpis.pagosRegistrados} pagos en ${reportData.kpis.metodosPagoCount} metodos`,
+    )
 
-    // Render Profits Table (SCRUM-16)
     const profitsBody = document.querySelector('#report-profits-table tbody')
     if (profitsBody) {
       if (reportData.profitReport.length === 0) {
-        profitsBody.innerHTML = `<tr><td colspan="9" class="empty-state">No se registraron ventas en este rango de fechas.</td></tr>`
+        profitsBody.innerHTML = '<tr><td colspan="12" class="empty-state">No se registraron ventas con estos filtros.</td></tr>'
       } else {
         profitsBody.innerHTML = reportData.profitReport.map(row => `
           <tr>
             <td><strong>${escapeHtml(row.numero_factura)}</strong></td>
             <td>${escapeHtml(row.fecha_venta.slice(0, 16).replace('T', ' '))}</td>
             <td>${escapeHtml(row.vendedor)}</td>
-            <td>${escapeHtml(row.cliente)}</td>
-            <td style="text-align: right; font-weight: bold;">Bs ${escapeHtml(formatCurrency(row.total))}</td>
-            <td style="text-align: right; color: var(--muted);">Bs ${escapeHtml(formatCurrency(row.costo))}</td>
-            <td style="text-align: right; color: var(--success); font-weight: bold;">Bs ${escapeHtml(formatCurrency(row.ganancia))}</td>
+            <td>${escapeHtml(row.turno)}</td>
+            <td style="text-align: right;">${escapeHtml(formatCurrency(row.cantidad_total))}</td>
+            <td style="text-align: right; font-weight: bold;">${escapeHtml(formatMoneyWithCurrency(row.total, row.moneda))}</td>
+            <td style="text-align: right; color: var(--muted);">${escapeHtml(formatMoneyWithCurrency(row.costo, row.moneda))}</td>
+            <td style="text-align: right; color: var(--success); font-weight: bold;">${escapeHtml(formatMoneyWithCurrency(row.ganancia, row.moneda))}</td>
             <td style="text-align: right; color: var(--accent); font-weight: bold;">${escapeHtml(formatCurrency(row.margen))}%</td>
-            <td style="text-align: center;"><span class="status-badge ${row.estado.toLowerCase() === 'completada' ? 'status-badge--success' : 'status-badge--warning'}">${escapeHtml(row.estado)}</span></td>
+            <td style="text-align: right;">${escapeHtml(formatMoneyWithCurrency(row.pagos_recibidos, row.moneda))}</td>
+            <td style="text-align: center;"><span class="badge ${getStatusBadgeClass(row.estado)}">${escapeHtml(row.estado)}</span></td>
+            <td style="text-align: center;"><button class="button button--small button--ghost" type="button" data-sale-detail-btn="${row.id_venta}"><i class="ti ti-eye"></i></button></td>
           </tr>
         `).join('')
       }
     }
 
-    // Render Cash Flow Table (SCRUM-18)
     const cashflowBody = document.querySelector('#report-cashflow-table tbody')
     if (cashflowBody) {
       if (reportData.cashFlowReport.length === 0) {
-        cashflowBody.innerHTML = `<tr><td colspan="3" class="empty-state">No se registraron cobros en este rango de fechas.</td></tr>`
+        cashflowBody.innerHTML = '<tr><td colspan="6" class="empty-state">No se registraron cobros con estos filtros.</td></tr>'
       } else {
         cashflowBody.innerHTML = reportData.cashFlowReport.map(row => `
           <tr>
             <td><strong>${escapeHtml(row.metodo_pago)}</strong></td>
-            <td style="text-align: right; font-weight: bold; color: var(--success);">Bs ${escapeHtml(formatCurrency(row.total_recibido))}</td>
-            <td style="text-align: center; color: var(--muted);">${escapeHtml(row.referencias_count)} transacciones</td>
+            <td>${escapeHtml(row.moneda)}</td>
+            <td style="text-align: right; font-weight: bold; color: var(--success);">${escapeHtml(formatMoneyWithCurrency(row.total_recibido, row.moneda))}</td>
+            <td style="text-align: center;">${escapeHtml(row.transacciones_count)}</td>
+            <td style="text-align: center;">${escapeHtml(row.ventas_count)}</td>
+            <td style="text-align: center;">${row.sin_referencia_count > 0 ? `<span class="badge badge--soft">${escapeHtml(row.sin_referencia_count)}</span>` : '0'}</td>
           </tr>
         `).join('')
       }
     }
 
-    // Render Charts (SCRUM-17)
-    renderBrandChart('brand-chart-container', reportData.charts.brands)
-    renderShiftChart('shift-chart-container', reportData.charts.shifts)
-    renderDailyTrendChart('daily-chart-container', reportData.charts.daily)
+    const cashflowSalesBody = document.querySelector('#report-cashflow-sales-table tbody')
+    if (cashflowSalesBody) {
+      if (reportData.cashFlowBySale.length === 0) {
+        cashflowSalesBody.innerHTML = '<tr><td colspan="9" class="empty-state">No hay ventas para conciliar con estos filtros.</td></tr>'
+      } else {
+        cashflowSalesBody.innerHTML = reportData.cashFlowBySale.map(row => `
+          <tr>
+            <td><strong>${escapeHtml(row.numero_factura)}</strong></td>
+            <td>${escapeHtml(row.cliente)}</td>
+            <td>${escapeHtml(row.vendedor)}</td>
+            <td style="text-align: right;">${escapeHtml(formatMoneyWithCurrency(row.total_vendido, row.moneda))}</td>
+            <td style="text-align: right; color: var(--success); font-weight: 700;">${escapeHtml(formatMoneyWithCurrency(row.total_recibido, row.moneda))}</td>
+            <td style="text-align: right; color: ${row.saldo_pendiente > 0 ? 'var(--danger)' : 'var(--muted)'};">${escapeHtml(formatMoneyWithCurrency(row.saldo_pendiente, row.moneda))}</td>
+            <td style="text-align: right;">${escapeHtml(formatMoneyWithCurrency(row.cambio, row.moneda))}</td>
+            <td>${escapeHtml(row.metodos_pago)}</td>
+            <td style="text-align: center;"><span class="badge ${getStatusBadgeClass(row.estado)}">${escapeHtml(row.estado)}</span></td>
+          </tr>
+        `).join('')
+      }
+    }
+
+    renderSalesReportCharts(reportData)
 
   } catch (error) {
-    alert(error instanceof Error ? error.message : 'Error al generar el reporte.')
+    setStatus('report-status', getFriendlyErrorMessage(error, 'Error al generar el reporte.'), 'error')
   } finally {
     if (btn) {
       btn.disabled = false
-      btn.textContent = 'Generar Reporte'
+      btn.innerHTML = '<i class="ti ti-chart-bar"></i> Generar'
     }
   }
 }
 
-function renderBrandChart(containerId: string, data: { marca: string; total_vendido: number }[]) {
+type HorizontalReportChartItem = {
+  label: string
+  total: number
+  ganancia: number
+  detail: string
+}
+
+function attachChartTooltip(container: HTMLElement, tooltipEl: HTMLElement) {
+  container.querySelectorAll<SVGGElement>('.chart-group').forEach((group) => {
+    group.addEventListener('mouseenter', () => {
+      const label = group.getAttribute('data-label') ?? ''
+      const value = group.getAttribute('data-value') ?? ''
+      tooltipEl.innerHTML = `<strong>${escapeHtml(label)}</strong><br/>${escapeHtml(value)}`
+      tooltipEl.style.opacity = '1'
+    })
+    group.addEventListener('mousemove', (event: MouseEvent) => {
+      const rect = container.getBoundingClientRect()
+      tooltipEl.style.left = `${event.clientX - rect.left}px`
+      tooltipEl.style.top = `${event.clientY - rect.top}px`
+    })
+    group.addEventListener('mouseleave', () => {
+      tooltipEl.style.opacity = '0'
+    })
+  })
+}
+
+function renderHorizontalReportChart(containerId: string, data: HorizontalReportChartItem[], emptyText: string) {
   const container = document.getElementById(containerId)
   if (!container) return
   if (!data || data.length === 0) {
-    container.innerHTML = '<div class="empty-state">No hay datos de marcas.</div>'
+    container.innerHTML = `<div class="empty-state">${escapeHtml(emptyText)}</div>`
     return
   }
 
   const width = container.clientWidth || 300
-  const height = 200
-  const paddingLeft = 90
-  const paddingRight = 80
+  const height = Math.max(210, data.length * 42 + 28)
+  const paddingLeft = 112
+  const paddingRight = 118
   const paddingTop = 10
   const paddingBottom = 10
-  const rowHeight = (height - paddingTop - paddingBottom) / Math.max(data.length, 1)
+  const rowHeight = (height - paddingTop - paddingBottom) / data.length
+  const barMaxWidth = Math.max(width - paddingLeft - paddingRight, 80)
+  const maxValue = Math.max(...data.map((item) => item.total), 1)
 
-  const maxValue = Math.max(...data.map(d => d.total_vendido), 1)
-
-  let svgContent = `<svg class="chart-svg" width="100%" height="${height}" viewBox="0 0 ${width} ${height}">`
+  let svgContent = `<svg class="chart-svg" width="100%" height="${height}" viewBox="0 0 ${width} ${height}" role="img">`
 
   let tooltipEl = container.querySelector('.chart-tooltip-el') as HTMLElement
   if (!tooltipEl) {
@@ -3481,24 +4266,26 @@ function renderBrandChart(containerId: string, data: { marca: string; total_vend
     container.appendChild(tooltipEl)
   }
 
-  data.forEach((d, idx) => {
+  data.forEach((item, idx) => {
     const y = paddingTop + idx * rowHeight + (rowHeight - 24) / 2
-    const barMaxWidth = width - paddingLeft - paddingRight
-    const barWidth = Math.max((d.total_vendido / maxValue) * barMaxWidth, 4)
+    const salesWidth = Math.max((item.total / maxValue) * barMaxWidth, 4)
+    const profitWidth = Math.max((Math.max(item.ganancia, 0) / maxValue) * barMaxWidth, item.ganancia > 0 ? 4 : 0)
+    const shortLabel = item.label.length > 16 ? `${item.label.slice(0, 15)}...` : item.label
 
     svgContent += `
-      <g class="chart-group" data-label="${escapeHtml(d.marca)}" data-value="Bs ${escapeHtml(formatCurrency(d.total_vendido))}">
-        <text class="chart-text" x="${paddingLeft - 10}" y="${y + 16}" text-anchor="end" style="font-weight: 600;">${escapeHtml(d.marca)}</text>
+      <g class="chart-group" data-label="${escapeHtml(item.label)}" data-value="${escapeHtml(item.detail)}">
+        <text class="chart-text" x="${paddingLeft - 10}" y="${y + 16}" text-anchor="end" style="font-weight: 700;">${escapeHtml(shortLabel)}</text>
         <rect x="${paddingLeft}" y="${y}" width="${barMaxWidth}" height="24" rx="4" fill="#f1f5f9" />
-        <rect class="chart-bar" x="${paddingLeft}" y="${y}" width="${barWidth}" height="24" rx="4" fill="url(#brandGrad)" />
-        <text class="chart-text" x="${paddingLeft + barWidth + 8}" y="${y + 16}" style="font-weight: 700; fill: var(--text);">${escapeHtml(formatCurrency(d.total_vendido))}</text>
+        <rect class="chart-bar" x="${paddingLeft}" y="${y}" width="${salesWidth}" height="24" rx="4" fill="url(#reportSalesGrad)" />
+        <rect class="chart-bar chart-bar--profit" x="${paddingLeft}" y="${y + 15}" width="${profitWidth}" height="8" rx="4" fill="#16a34a" />
+        <text class="chart-text" x="${paddingLeft + salesWidth + 8}" y="${y + 16}" style="font-weight: 800; fill: var(--text);">${escapeHtml(formatCurrency(item.total))}</text>
       </g>
     `
   })
 
   svgContent += `
     <defs>
-      <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <linearGradient id="reportSalesGrad" x1="0%" y1="0%" x2="100%" y2="0%">
         <stop offset="0%" stop-color="#0ea5a6" />
         <stop offset="100%" stop-color="#0f766e" />
       </linearGradient>
@@ -3508,115 +4295,49 @@ function renderBrandChart(containerId: string, data: { marca: string; total_vend
   svgContent += '</svg>'
   container.innerHTML = svgContent
   container.appendChild(tooltipEl)
-
-  container.querySelectorAll('.chart-group').forEach(group => {
-    group.addEventListener('mouseenter', () => {
-      const label = group.getAttribute('data-label')
-      const val = group.getAttribute('data-value')
-      tooltipEl.innerHTML = `<strong>${label}</strong><br/>${val}`
-      tooltipEl.style.opacity = '1'
-    })
-    group.addEventListener('mousemove', (e: any) => {
-      const rect = container.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
-      tooltipEl.style.left = `${x}px`
-      tooltipEl.style.top = `${y}px`
-    })
-    group.addEventListener('mouseleave', () => {
-      tooltipEl.style.opacity = '0'
-    })
-  })
+  attachChartTooltip(container, tooltipEl)
 }
 
-function renderShiftChart(containerId: string, data: { turno: string; total_vendido: number }[]) {
-  const container = document.getElementById(containerId)
-  if (!container) return
-  if (!data || data.length === 0) {
-    container.innerHTML = '<div class="empty-state">No hay datos de turnos.</div>'
-    return
-  }
-
-  const width = container.clientWidth || 300
-  const height = 200
-  const paddingLeft = 50
-  const paddingRight = 20
-  const paddingTop = 20
-  const paddingBottom = 40
-
-  const colWidth = (width - paddingLeft - paddingRight) / Math.max(data.length, 1)
-  const maxValue = Math.max(...data.map(d => d.total_vendido), 1)
-
-  let svgContent = `<svg class="chart-svg" width="100%" height="${height}" viewBox="0 0 ${width} ${height}">`
-
-  let tooltipEl = container.querySelector('.chart-tooltip-el') as HTMLElement
-  if (!tooltipEl) {
-    tooltipEl = document.createElement('div')
-    tooltipEl.className = 'chart-tooltip-el'
-    container.appendChild(tooltipEl)
-  }
-
-  const gridLinesCount = 4
-  const chartHeight = height - paddingTop - paddingBottom
-  const chartWidth = width - paddingLeft - paddingRight
-
-  for (let i = 0; i <= gridLinesCount; i++) {
-    const y = paddingTop + (chartHeight / gridLinesCount) * i
-    const val = maxValue - (maxValue / gridLinesCount) * i
-    svgContent += `
-      <line class="chart-grid-line" x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" />
-      <text class="chart-text" x="${paddingLeft - 8}" y="${y + 4}" text-anchor="end">${escapeHtml(Math.round(val))}</text>
-    `
-  }
-
-  data.forEach((d, idx) => {
-    const barHeight = (d.total_vendido / maxValue) * chartHeight
-    const x = paddingLeft + idx * colWidth + (colWidth - 36) / 2
-    const y = height - paddingBottom - barHeight
-
-    svgContent += `
-      <g class="chart-group" data-label="${escapeHtml(d.turno)}" data-value="Bs ${escapeHtml(formatCurrency(d.total_vendido))}">
-        <rect x="${x}" y="${paddingTop}" width="36" height="${chartHeight}" rx="4" fill="#f1f5f9" />
-        <rect class="chart-bar" x="${x}" y="${y}" width="36" height="${barHeight}" rx="4" fill="url(#shiftGrad)" />
-        <text class="chart-text" x="${x + 18}" y="${height - paddingBottom + 16}" text-anchor="middle" style="font-weight: 600;">${escapeHtml(d.turno)}</text>
-      </g>
-    `
-  })
-
-  svgContent += `
-    <defs>
-      <linearGradient id="shiftGrad" x1="0%" y1="100%" x2="0%" y2="0%">
-        <stop offset="0%" stop-color="#9333ea" />
-        <stop offset="100%" stop-color="#7c3aed" />
-      </linearGradient>
-    </defs>
-  `
-
-  svgContent += '</svg>'
-  container.innerHTML = svgContent
-  container.appendChild(tooltipEl)
-
-  container.querySelectorAll('.chart-group').forEach(group => {
-    group.addEventListener('mouseenter', () => {
-      const label = group.getAttribute('data-label')
-      const val = group.getAttribute('data-value')
-      tooltipEl.innerHTML = `<strong>${label}</strong><br/>${val}`
-      tooltipEl.style.opacity = '1'
-    })
-    group.addEventListener('mousemove', (e: any) => {
-      const rect = container.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
-      tooltipEl.style.left = `${x}px`
-      tooltipEl.style.top = `${y}px`
-    })
-    group.addEventListener('mouseleave', () => {
-      tooltipEl.style.opacity = '0'
-    })
-  })
+function renderBrandChart(containerId: string, data: SalesReportData['charts']['brands']) {
+  renderHorizontalReportChart(
+    containerId,
+    data.map((item) => ({
+      label: item.marca,
+      total: item.total_vendido,
+      ganancia: item.total_ganancia,
+      detail: `Vendido: Bs ${formatCurrency(item.total_vendido)} | Ganancia: Bs ${formatCurrency(item.total_ganancia)} | Unidades: ${formatCurrency(item.unidades)} | Margen: ${formatCurrency(item.margen)}%`,
+    })),
+    'No hay datos de marcas.',
+  )
 }
 
-function renderDailyTrendChart(containerId: string, data: { fecha: string; total_vendido: number; total_ganancia: number }[]) {
+function renderShiftChart(containerId: string, data: SalesReportData['charts']['shifts']) {
+  renderHorizontalReportChart(
+    containerId,
+    data.map((item) => ({
+      label: item.turno,
+      total: item.total_vendido,
+      ganancia: item.total_ganancia,
+      detail: `Vendido: Bs ${formatCurrency(item.total_vendido)} | Ganancia: Bs ${formatCurrency(item.total_ganancia)} | Ventas: ${item.ventas_count} | Margen: ${formatCurrency(item.margen)}%`,
+    })),
+    'No hay datos de turnos.',
+  )
+}
+
+function renderSellerChart(containerId: string, data: SalesReportData['charts']['sellers']) {
+  renderHorizontalReportChart(
+    containerId,
+    data.map((item) => ({
+      label: item.vendedor,
+      total: item.total_vendido,
+      ganancia: item.total_ganancia,
+      detail: `Vendido: Bs ${formatCurrency(item.total_vendido)} | Ganancia: Bs ${formatCurrency(item.total_ganancia)} | Ventas: ${item.ventas_count} | Margen: ${formatCurrency(item.margen)}%`,
+    })),
+    'No hay datos de vendedores.',
+  )
+}
+
+function renderDailyTrendChart(containerId: string, data: SalesReportData['charts']['daily']) {
   const container = document.getElementById(containerId)
   if (!container) return
   if (!data || data.length === 0) {
@@ -3634,7 +4355,7 @@ function renderDailyTrendChart(containerId: string, data: { fecha: string; total
   const chartWidth = width - paddingLeft - paddingRight
   const chartHeight = height - paddingTop - paddingBottom
 
-  const maxVal = Math.max(...data.map(d => Math.max(d.total_vendido, d.total_ganancia)), 1)
+  const maxVal = Math.max(...data.map(d => Math.max(d.total_vendido, d.total_costo, d.total_ganancia)), 1)
 
   let svgContent = `<svg class="chart-svg" width="100%" height="${height}" viewBox="0 0 ${width} ${height}">`
 
@@ -3670,6 +4391,12 @@ function renderDailyTrendChart(containerId: string, data: { fecha: string; total
     return { x, y, val: d.total_ganancia, label: d.fecha }
   })
 
+  const costPoints = data.map((d, i) => {
+    const x = paddingLeft + i * stepX
+    const y = height - paddingBottom - (d.total_costo / maxVal) * chartHeight
+    return { x, y, val: d.total_costo, label: d.fecha }
+  })
+
   const getLinePath = (points: { x: number; y: number }[]) => {
     return points.reduce((path, p, i) => path + (i === 0 ? `M ${p.x} ${p.y}` : ` L ${p.x} ${p.y}`), '')
   }
@@ -3685,11 +4412,14 @@ function renderDailyTrendChart(containerId: string, data: { fecha: string; total
   svgContent += `<path class="chart-area" d="${getAreaPath(salesPoints)}" fill="#0284c7" />`
   svgContent += `<path class="chart-line" d="${getLinePath(salesPoints)}" stroke="#0284c7" stroke-width="3" />`
 
+  svgContent += `<path class="chart-line" d="${getLinePath(costPoints)}" stroke="#ea580c" stroke-width="3" stroke-dasharray="6 5" />`
+
   svgContent += `<path class="chart-area" d="${getAreaPath(profitPoints)}" fill="#16a34a" />`
   svgContent += `<path class="chart-line" d="${getLinePath(profitPoints)}" stroke="#16a34a" stroke-width="3" />`
 
   salesPoints.forEach((p, i) => {
     const pr = profitPoints[i]
+    const cost = costPoints[i]
     const showLabel = totalPoints <= 7 || i % Math.ceil(totalPoints / 7) === 0
     if (showLabel) {
       const dateParts = p.label.split('-')
@@ -3708,6 +4438,11 @@ function renderDailyTrendChart(containerId: string, data: { fecha: string; total
       <circle class="chart-dot chart-group" cx="${pr.x}" cy="${pr.y}" r="4" fill="#ffffff" stroke="#16a34a" stroke-width="2" 
         data-label="Ganancia (${escapeHtml(pr.label)})" data-value="Bs ${escapeHtml(formatCurrency(pr.val))}" />
     `
+
+    svgContent += `
+      <circle class="chart-dot chart-group" cx="${cost.x}" cy="${cost.y}" r="4" fill="#ffffff" stroke="#ea580c" stroke-width="2"
+        data-label="Costo (${escapeHtml(cost.label)})" data-value="Bs ${escapeHtml(formatCurrency(cost.val))}" />
+    `
   })
 
   svgContent += '</svg>'
@@ -3721,7 +4456,8 @@ function renderDailyTrendChart(containerId: string, data: { fecha: string; total
       tooltipEl.innerHTML = `<strong>${label}</strong><br/>${val}`
       tooltipEl.style.opacity = '1'
     })
-    group.addEventListener('mousemove', (e: any) => {
+    group.addEventListener('mousemove', (event) => {
+      const e = event as MouseEvent
       const rect = container.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
