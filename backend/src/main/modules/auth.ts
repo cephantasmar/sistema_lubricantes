@@ -128,7 +128,7 @@ export function getCurrentUserAccess(db: Database.Database) {
 
 export function hasPermission(db: Database.Database, permissionName: string) {
   const access = getCurrentUserAccess(db)
-  return (currentActiveUser?.id_usuario === 1) || access.permissionNames.includes(permissionName)
+  return getCurrentUserId() === 1 || access.permissionNames.includes(permissionName)
 }
 
 export function requirePermission(db: Database.Database, permissionName: string) {

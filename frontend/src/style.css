@@ -291,7 +291,7 @@ body {
   flex-direction: column;
   justify-content: center;
   min-height: 170px;
-  grid-column: 1;
+  grid-column: 1 / -1;
   grid-row: 1;
 }
 
@@ -320,8 +320,6 @@ body {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.84);
   padding: 18px;
-  grid-column: 2;
-  grid-row: 1;
 }
 
 .landing-clock span,
@@ -330,9 +328,132 @@ body {
 }
 
 .landing-clock strong {
-  font-size: 3.2rem;
+  font-size: clamp(2rem, 3.2vw, 3.2rem);
   line-height: 1;
   color: #70b39e;
+  white-space: nowrap;
+}
+
+.landing-top-widgets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.exchange-card {
+  display: grid;
+  align-content: center;
+  gap: 11px;
+  min-width: 0;
+  min-height: 170px;
+  border: 1px solid #d9eee8;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), #edf8f4);
+  padding: 16px;
+}
+
+.exchange-card__header,
+.exchange-card__value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.exchange-card__header > div,
+.exchange-card__value > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.exchange-card__header span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.exchange-card__header small,
+.exchange-card__value span,
+.exchange-card__footnote {
+  color: var(--muted);
+}
+
+.exchange-refresh {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.exchange-card__value > i {
+  flex: 0 0 auto;
+  color: #4f907d;
+  font-size: 2.4rem;
+}
+
+.exchange-card__value strong {
+  color: #24453a;
+  font-size: clamp(1.3rem, 2vw, 1.8rem);
+  line-height: 1;
+}
+
+.exchange-card__value span {
+  font-size: 0.75rem;
+}
+
+.exchange-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.exchange-card__metrics div {
+  border: 1px solid rgba(112, 179, 158, 0.24);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 8px;
+}
+
+.exchange-card__metrics span,
+.exchange-card__metrics strong {
+  display: block;
+}
+
+.exchange-card__metrics span {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.exchange-card__metrics strong {
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.exchange-card__footnote {
+  overflow: hidden;
+  font-size: 0.65rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+}
+
+.exchange-card[data-state='offline'] .exchange-card__value > i {
+  color: var(--muted);
+}
+
+.exchange-refresh.is-loading i {
+  animation: weather-icon-spin 0.9s linear infinite;
 }
 
 .weather-card {
@@ -345,7 +466,7 @@ body {
   background: rgba(255, 255, 255, 0.84);
   padding: 18px;
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 3;
   background: linear-gradient(145deg, #eef8f5, #e3f2f7);
 }
 
@@ -497,7 +618,7 @@ body {
 
 .quick-actions-panel {
   grid-column: 1;
-  grid-row: 2 / span 2;
+  grid-row: 3 / span 2;
   border: 1px solid #d9eee8;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.84);
@@ -571,7 +692,7 @@ body {
 
 .home-info-card {
   grid-column: 2;
-  grid-row: 3;
+  grid-row: 4;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -611,6 +732,7 @@ body {
   }
 
   .landing-panel__content,
+  .landing-top-widgets,
   .landing-clock,
   .quick-actions-panel,
   .weather-card,
@@ -618,9 +740,17 @@ body {
     grid-column: 1;
     grid-row: auto;
   }
+
+  .landing-top-widgets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 680px) {
+  .landing-top-widgets {
+    grid-template-columns: 1fr;
+  }
+
   .quick-actions-grid,
   .weather-card__metrics {
     grid-template-columns: 1fr;
@@ -2597,11 +2727,26 @@ body {
 
 :root[data-theme='dark'] .dashboard-brand__tags span,
 :root[data-theme='dark'] .landing-clock,
+:root[data-theme='dark'] .exchange-card,
 :root[data-theme='dark'] .quick-actions-panel,
 :root[data-theme='dark'] .home-info-card,
 :root[data-theme='dark'] .weather-card__metrics div {
   border-color: var(--border);
   background: rgba(25, 41, 37, 0.84);
+}
+
+:root[data-theme='dark'] .exchange-card {
+  background: linear-gradient(145deg, #172a25, #1c3730);
+}
+
+:root[data-theme='dark'] .exchange-card__value strong {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .exchange-card__metrics div,
+:root[data-theme='dark'] .exchange-refresh {
+  border-color: var(--border);
+  background: var(--surface-alt);
 }
 
 :root[data-theme='dark'] .landing-panel {
