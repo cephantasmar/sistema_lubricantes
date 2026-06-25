@@ -7,6 +7,7 @@ import type {
   InventoryAuditInput,
   InventoryAuditResult,
   MovementFormInput,
+  ParallelDollarRate,
   ProductFormInput,
   SaleFormInput,
   SaleFullDetail,
@@ -25,6 +26,8 @@ import type {
 contextBridge.exposeInMainWorld('inventoryApi', {
   getAppInfo: () => ipcRenderer.invoke('system:get-app-info') as Promise<AppInfo>,
   getBootstrapData: () => ipcRenderer.invoke('app:get-bootstrap-data') as Promise<BootstrapData>,
+  getParallelDollarRate: (forceRefresh = false) =>
+    ipcRenderer.invoke('market:get-parallel-dollar-rate', forceRefresh) as Promise<ParallelDollarRate>,
   
   // Inventory & Sales
   saveProduct: (payload: ProductFormInput) => ipcRenderer.invoke('inventory:save-product', payload) as Promise<{ productId: number }>,
