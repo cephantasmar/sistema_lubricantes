@@ -353,7 +353,7 @@ export function listSales(database: Database.Database, sellerScopeId?: number | 
 }
 
 export function saveClient(database: Database.Database, input: ClientFormInput) {
-  requirePermission(database, 'REGISTRAR_VENTAS')
+  requirePermission(database, 'GESTIONAR_VENTAS')
 
   const nombre = normalizeText(input.nombre)
   const documento = normalizeText(input.documento)
@@ -565,18 +565,14 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
   const canManageRoles = hasPermission(database, 'GESTIONAR_ROLES')
   const canManageWorkers = hasPermission(database, 'GESTIONAR_TRABAJADORES')
   const canManageShifts = hasPermission(database, 'GESTIONAR_TURNOS')
-  const canAccessInventoryData =
-    hasPermission(database, 'VER_INVENTARIO') ||
-    hasPermission(database, 'REGISTRAR_MOVIMIENTOS') ||
-    hasPermission(database, 'REGISTRAR_VENTAS') ||
-    hasPermission(database, 'GESTIONAR_INVENTARIO')
+  const canAccessInventoryData = hasPermission(database, 'GESTIONAR_INVENTARIO')
   const canAccessAttendanceData = hasPermission(database, 'VER_ASISTENCIAS') || hasPermission(database, 'REGISTRAR_ASISTENCIAS')
   const attendanceWorkerScope = access.canViewAllAttendance ? null : getCurrentWorkerId() ?? -1
 
   const products = canAccessInventoryData ? listProducts(database) : []
-  const movements = hasPermission(database, 'VER_MOVIMIENTOS') ? listMovements(database) : []
-  const canViewAllSales = access.isAdminLike || access.permissionNames.includes('VER_VENTAS')
-  const canAccessSales = canViewAllSales || access.permissionNames.includes('REGISTRAR_VENTAS')
+  const movements = hasPermission(database, 'GESTIONAR_MOVIMIENTOS') ? listMovements(database) : []
+  const canViewAllSales = access.isAdminLike || access.permissionNames.includes('GESTIONAR_VENTAS')
+  const canAccessSales = canViewAllSales
   const sales = canAccessSales
     ? listSales(database, canViewAllSales ? null : getCurrentWorkerId() ?? -1)
     : []
@@ -589,7 +585,7 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
         ${salesMetricFilter}
       `).get(...salesMetricParams) as { total_sales: number; total_amount: number })
     : { total_sales: 0, total_amount: 0 }
-  const clients = hasPermission(database, 'REGISTRAR_VENTAS')
+  const clients = hasPermission(database, 'GESTIONAR_VENTAS')
     ? (database.prepare(`
         SELECT id_cliente, nombre, COALESCE(documento, '') AS documento, telefono, email, direccion, creado_en
         FROM clientes
@@ -622,7 +618,8 @@ export function getBootstrapData(database: Database.Database): BootstrapData {
     ${workerAdminFilter}
     ORDER BY t.nombres ASC
   `).all(...workerAdminParams) as WorkerRow[]
-  const auditLogs = access.isAdminLike ? database.prepare(`
+  const canAccessAudit = hasPermission(database, 'VER_AUDITORIA')
+  const auditLogs = canAccessAudit ? database.prepare(`
     SELECT l.id_log, COALESCE(u.username, 'Sistema') AS usuario, l.accion, l.modulo, l.descripcion, l.fecha_evento 
     FROM auditoria_logs l 
     LEFT JOIN usuarios u ON u.id_usuario = l.id_usuario 
@@ -886,7 +883,7 @@ export function saveProduct(database: Database.Database, input: ProductFormInput
 }
 
 export function createMovement(database: Database.Database, input: MovementFormInput) {
-  requirePermission(database, 'REGISTRAR_MOVIMIENTOS')
+  requirePermission(database, 'GESTIONAR_MOVIMIENTOS')
 
   const transaction = database.transaction((payload: MovementFormInput) => {
     assertRequiredId(payload.id_producto, 'un producto')
@@ -969,7 +966,7 @@ function getCurrencyRate(database: Database.Database, idMoneda: number): number 
 }
 
 export function createSale(database: Database.Database, input: SaleFormInput) {
-  requirePermission(database, 'REGISTRAR_VENTAS')
+  requirePermission(database, 'GESTIONAR_VENTAS')
 
   const transaction = database.transaction((payload: SaleFormInput) => {
     if (!payload.detalles.length) {

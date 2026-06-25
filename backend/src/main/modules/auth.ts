@@ -122,13 +122,13 @@ export function getCurrentUserAccess(db: Database.Database) {
 
   return {
     ...access,
-    canViewAllAttendance: access.isAdminLike,
+    canViewAllAttendance: access.isAdminLike || access.permissionNames.includes('VER_ASISTENCIAS'),
   }
 }
 
 export function hasPermission(db: Database.Database, permissionName: string) {
   const access = getCurrentUserAccess(db)
-  return access.userId === 1 || access.permissionNames.includes(permissionName)
+  return (currentActiveUser?.id_usuario === 1) || access.permissionNames.includes(permissionName)
 }
 
 export function requirePermission(db: Database.Database, permissionName: string) {

@@ -119,17 +119,17 @@ function hasAnyPermission(permissionNames: string[]) {
 function canAccessTab(tabName: TabName) {
   const accessByTab: Record<TabName, boolean> = {
     home: true,
-    dashboard: Boolean(currentUser?.isAdminLike),
-    inventario: hasAnyPermission(['VER_INVENTARIO', 'GESTIONAR_INVENTARIO']),
-    movimientos: hasAnyPermission(['VER_MOVIMIENTOS', 'REGISTRAR_MOVIMIENTOS']),
-    ventas: hasAnyPermission(['VER_VENTAS', 'REGISTRAR_VENTAS']),
+    dashboard: hasAnyPermission(['VER_DASHBOARD']) || Boolean(currentUser?.isAdminLike),
+    inventario: hasPermission('GESTIONAR_INVENTARIO'),
+    movimientos: hasPermission('GESTIONAR_MOVIMIENTOS'),
+    ventas: hasPermission('GESTIONAR_VENTAS'),
     turnos: hasAnyPermission(['VER_ASISTENCIAS', 'REGISTRAR_ASISTENCIAS']),
-    administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES', 'GESTIONAR_TURNOS']),
+    administracion: hasAnyPermission(['GESTIONAR_ROLES', 'GESTIONAR_TRABAJADORES', 'GESTIONAR_TURNOS', 'VER_AUDITORIA']),
     'admin-roles': hasPermission('GESTIONAR_ROLES'),
     'admin-trabajadores': hasPermission('GESTIONAR_TRABAJADORES'),
     'admin-turnos': hasPermission('GESTIONAR_TURNOS'),
-    'admin-auditoria': Boolean(currentUser?.isAdminLike),
-    reportes: hasAnyPermission(['VER_REPORTES', 'GENERAR_REPORTES']),
+    'admin-auditoria': hasPermission('VER_AUDITORIA'),
+    reportes: hasPermission('GESTIONAR_REPORTES'),
   }
 
   return accessByTab[tabName]
@@ -567,7 +567,7 @@ function renderHomeQuickActions() {
       },
     )
   } else {
-    if (hasPermission('REGISTRAR_VENTAS')) {
+    if (hasPermission('GESTIONAR_VENTAS')) {
       actions.push({
         tab: 'ventas',
         icon: 'ti-shopping-cart-plus',
@@ -941,9 +941,9 @@ function applyAccessControl() {
     setInventoryAuditMode(false)
   }
 
-  setClosestCardHidden('#movement-form', !hasPermission('REGISTRAR_MOVIMIENTOS'))
-  setClosestCardHidden('#sale-form', !hasPermission('REGISTRAR_VENTAS'))
-  const canManageAttendancePanel = Boolean(currentUser?.isAdminLike)
+  setClosestCardHidden('#movement-form', !hasPermission('GESTIONAR_MOVIMIENTOS'))
+  setClosestCardHidden('#sale-form', !hasPermission('GESTIONAR_VENTAS'))
+  const canManageAttendancePanel = hasPermission('VER_ASISTENCIAS') || Boolean(currentUser?.isAdminLike)
   setClosestCardHidden('#attendance-form', !hasPermission('REGISTRAR_ASISTENCIAS'))
   setClosestCardHidden('#attendance-table', !canManageAttendancePanel)
   setClosestCardHidden('#work-hours-table', !canManageAttendancePanel)
@@ -2963,7 +2963,7 @@ async function bootstrap() {
 
   clientForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
-    if (!hasPermission('REGISTRAR_VENTAS')) {
+    if (!hasPermission('GESTIONAR_VENTAS')) {
       setStatus('client-status', 'No tienes permiso para registrar clientes.', 'error')
       return
     }
@@ -3099,7 +3099,7 @@ async function bootstrap() {
 
   movementForm?.addEventListener('submit', async (event) => {
     event.preventDefault()
-    if (!hasPermission('REGISTRAR_MOVIMIENTOS')) {
+    if (!hasPermission('GESTIONAR_MOVIMIENTOS')) {
       setStatus('movement-status', 'No tienes permiso para registrar movimientos.', 'error')
       return
     }
@@ -3188,7 +3188,7 @@ async function bootstrap() {
       return
     }
 
-    if (!hasPermission('REGISTRAR_VENTAS')) {
+    if (!hasPermission('GESTIONAR_VENTAS')) {
       setStatus('sale-status', 'No tienes permiso para registrar ventas.', 'error')
       return
     }
